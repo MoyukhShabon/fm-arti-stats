@@ -1,0 +1,3 @@
+[submodule "common-ffpe-snvf"]
+	path = common-ffpe-snvf
+	url = git@github.com:MoyukhShabon/common-ffpe-snvf.git
