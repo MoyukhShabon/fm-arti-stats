@@ -12,15 +12,24 @@ if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
     stop("Invalid --fp.cut; must be a number between 0 and 1")
 }
 
+dir.create("../annot", showWarnings=FALSE)
+
 snvf_paths <- Sys.glob("../*/*/*.mobsnvf.*.snv")
 
-for (path in snvf_paths){
+# Get file info for all paths at once
+file_sizes <- file.info(snvf_paths)$size
 
-    fi <- file.info(path)
-    if (is.na(fi$size) || fi$size == 0) {
-        message(sprintf("Skipping missing/empty file: %s", basename(path)))
-        next
-    }
+# Separate valid and empty files
+empty_files <- snvf_paths[is.na(file_sizes) | file_sizes == 0]
+valid_files <- snvf_paths[!is.na(file_sizes) & file_sizes > 0]
+
+# Save empty files list if any
+if (length(empty_files) > 0) {
+    writeLines(empty_files, "../annot/no_variants.txt")
+    message(sprintf("Found %d empty/missing files", length(empty_files)))
+}
+
+for (path in valid_files){
 
     message(sprintf("Processing: %s", basename(path)))
 
@@ -31,5 +40,3 @@ for (path in snvf_paths){
     message(sprintf("Prediction for %s written to: %s", basename(path), out_path))
 
 }
-
-
