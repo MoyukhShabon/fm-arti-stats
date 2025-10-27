@@ -1,10 +1,18 @@
 #!/usr/bin/env Rscript
 
 library(io)
+library(argparser)
 source("../../common-ffpe-snvf/R/eval.R")
 
-snvf_paths <- Sys.glob("../*/*/*.mobsnvf.*.snv")
+p <- arg_parser("Predict Artifactual SNVs via a FDR adjusted False Positive threshold")
+p <- add_argument(p, "--fp.cut", help = "False positive cutoff (numeric, between 0 and 1)", default = 0.5)
+argv <- parse_args(p)
+fp.cut <- as.numeric(argv$fp.cut)
+if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
+    stop("Invalid --fp.cut; must be a number between 0 and 1")
+}
 
+snvf_paths <- Sys.glob("../*/*/*.mobsnvf.*.snv")
 
 for (path in snvf_paths){
 
@@ -16,8 +24,8 @@ for (path in snvf_paths){
 
     message(sprintf("Processing: %s", basename(path)))
 
-    out_path <- gsub("\\.snv", "\\.pred_fp-cut_5e-1.tsv", path)
-    snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut = 0.5)
+    out_path <- gsub("\\.snv", sprintf("\\.pred_fp-cut_%s.tsv", format(fp.cut, scientific = TRUE)), path)
+    snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut)
 
     qwrite(snv_pred, out_path)
     message(sprintf("Prediction for %s written to: %s", basename(path), out_path))
