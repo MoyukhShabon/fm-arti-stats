@@ -4,15 +4,11 @@ Foundation Medicine Artifact Status
 
 ## Objective
 
-Analyzing the extent of artifacts - FFPE, OxoG etc in foundation medicine dataset.
+Here we aim to analyze the extent of artifacts - FFPE, OxoG etc that may be present in foundation medicine dataset.
 
 ## Method
 
-Use MOBSNVF to determine the extent of FFPE and OxoG artifacts
-
-### Assumption
-
-MOBSNVF is has a precision good enough that most predicted artifacts are a True Positive
+MOBSNVF used to determine the extent of FFPE and OxoG artifacts under the assumption that it has sufficient precision to identify artifacts are a True Positive
 
 ## Observations
 
@@ -59,6 +55,13 @@ This will create batch scripts for FFPE and OxoG artifact filtering in the `ffpe
 ```bash
     bash filter.sh
 ```
+
+
+## Issues
+
+It was seen that some VCFs have multiple BAMs. I was seen that the <sample_name>_DNA.bam is significantly smaller than the *US\<nnnnnnn>.sorted.bam. Sumedha was contacted for elaboration of the data. As of right now the larger bam is being used for analysis.
+
+![multiple_bams_per_sample](.md_images/multiple_bam_per_sample.png)
 
 
 

@@ -1,0 +1,9 @@
+*.bam
+*.bai
+scripts
+*.snv
+*.json
+*.vcf
+*.xml
+*.md5
+sbatch*
