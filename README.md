@@ -59,7 +59,7 @@ This will create batch scripts for FFPE and OxoG artifact filtering in the `ffpe
 
 ## Issues
 
-It was seen that some VCFs have multiple BAMs. I was seen that the <sample_name>_DNA.bam is significantly smaller than the *US\<nnnnnnn>.sorted.bam. Sumedha was contacted for elaboration of the data. As of right now the larger bam is being used for analysis.
+It was seen that some VCFs have multiple BAMs. It was seen that the <sample_name>_DNA.bam is significantly smaller than the <sample_name>*US\<nnnnnnn>.sorted.bam. Sumedha was contacted for elaboration of the data. As of right now the larger bam is being used for analysis.
 
 ![multiple_bams_per_sample](.md_images/multiple_bam_per_sample.png)
 
