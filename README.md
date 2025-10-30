@@ -8,11 +8,11 @@ Here we aim to analyze the extent of artifacts - FFPE, OxoG etc that may be pres
 
 ## Method
 
-MOBSNVF used to determine the extent of FFPE and OxoG artifacts under the assumption that it has sufficient precision to identify artifacts are a True Positive
+MOBSNVF is used to determine the extent of FFPE and OxoG artifacts under the assumption that it has sufficient precision i.e the artifacts identified are True Positive.
 
 ## Observations
 
-Looking at the BAM headers, it is found that the alignment is done against hg19 reference. Therefore a UCSC hg19 reference was downloaded from the broad institute.
+The BAM headers states that read are aligned against the hg19 reference. Therefore the UCSC hg19 reference was downloaded from the broad institute.
 
 ```
 gs://gatk-legacy-bundles
@@ -56,6 +56,19 @@ This will create batch scripts for FFPE and OxoG artifact filtering in the `ffpe
     bash filter.sh
 ```
 
+6. Navigate to the `analysis` directory and run `predict.R` with specific values of fp-cut.
+
+```
+Rscript predict.R --fp.cut 0.5
+Rscript predict.R --fp.cut 1e-08
+```
+
+This creates predictions based on the specified False Positive Cut threshold applied after FDR correcting the scores of MOBSNVF.
+
+
+7. Run the `proportions.py` under the same analysis directory:
+
+This calculates the proportion of artifacts in each sample and gives an overall summary. The table with the proportions are saved in the same directory. E.g. `ffpe_proportions_per_sample.fp-cut_1e-08.tsv`, `oxog_proportions_per_sample.fp-cut_1e-08.tsv` etc.
 
 ## Issues
 
@@ -63,6 +76,8 @@ It was seen that some VCFs have multiple BAMs. It was seen that the <sample_name
 
 ![multiple_bams_per_sample](.md_images/multiple_bam_per_sample.png)
 
+Some VCFs do not have associated BAMs
 
+![samples_no_bams](.md_images/no_bam_samples.png)
 
 
