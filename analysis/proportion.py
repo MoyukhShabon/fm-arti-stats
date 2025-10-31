@@ -83,7 +83,7 @@ def get_stats(arti_prop: pl.DataFrame, damage_type: str = None) -> None:
 	print("Results stratified by test type:")
 	for i in range(prop_test_type.shape[0]):
 
-		test_type = prop_test_type_with_artifact[i, "test_type"]
+		test_type = prop_test_type[i, "test_type"]
 
 		print(f"\t{test_type} samples: {prop_test_type[i, "count"]}")
 		print(f"\t{test_type} max artifact proportion within samples: {prop_test_type[i, "max_proportion"] * 100:.2f}%")
