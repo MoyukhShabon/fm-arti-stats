@@ -4,6 +4,10 @@ import os
 import glob
 from lxml import etree
 
+# %% [markdown]
+# ## Functions
+
+# %%
 def get_test_type(xml_path: int) -> str:
 	
 	if not os.path.exists(xml_path):
@@ -14,6 +18,7 @@ def get_test_type(xml_path: int) -> str:
 	return root.xpath("//TestType")[0].text
 
 
+# %%
 def calc_arti_prop(artifact_pred_paths: list) -> pl.DataFrame:
 	arti_prop = []
 
@@ -42,7 +47,8 @@ def calc_arti_prop(artifact_pred_paths: list) -> pl.DataFrame:
 	arti_prop = pl.DataFrame(arti_prop).sort("proportion", descending=True)
 	return arti_prop
 
-def get_stats(arti_prop: pl.DataFrame, damage_type: str = None) -> None:
+# %%
+def get_stats(arti_prop: pl.DataFrame, damage_type: str = None, variant_source: str = None) -> None:
 	
 	prop_test_type = (
 		arti_prop
@@ -74,13 +80,16 @@ def get_stats(arti_prop: pl.DataFrame, damage_type: str = None) -> None:
 	if damage_type:
 		print("Damage Type:", damage_type.upper())
 
+	if variant_source:
+		print("Variant Source:", variant_source.upper())
+
 	print(f"Samples analyzed: {n_samples}")
 	print(f"Samples with ≥1 predicted artifact: {n_with_artifacts} ({n_with_artifacts / n_samples * 100:.1f}%)")
 	print(f"Mean proportion of artifactual SNVs: {mean_pct:.2f}%")
 	print(f"Max proportion of artifactual SNVs: {max_pct:.2f}%")
-	print(f"Mean proportion of artifactual SNVs within samples with ≥1 predicted artifact: {mean_pct_arti_samples:.2f}%")
+	print(f"Mean proportion of artifactual SNVs within samples with ≥1 predicted artifact: {mean_pct_arti_samples:.2f}%\n")
  
-	print("Results stratified by test type:")
+	print("Results stratified by test type:\n")
 	for i in range(prop_test_type.shape[0]):
 
 		test_type = prop_test_type[i, "test_type"]
@@ -95,13 +104,13 @@ def get_stats(arti_prop: pl.DataFrame, damage_type: str = None) -> None:
 			print(f"\t{test_type} samples with >1 artifact: {prop_test_type_with_artifact_filtered[0, "count_>=1_artifact"]}")
 			print(f"\t{test_type} mean artifact proportion within samples with ≥1 detected artifacts: {prop_test_type_with_artifact_filtered[0, "mean_proportion"] * 100:.2f}%")
 
-		## Create spacing
 		print()
-	print()
+	print("-----------------\n")
 
-def get_res(damage_type: str, fp_cut: float) -> pl.DataFrame:
+# %%
+def get_res(variant_source: str, damage_type: str, fp_cut: float) -> pl.DataFrame:
 	
-	search_pattern = f"../{damage_type.lower()}-snvf/*/*.pred_fp-cut_{fp_cut:.0e}.tsv"
+	search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-snvf/*/*.pred_fp-cut_{fp_cut:.0e}.tsv"
 	arti_pred_paths = glob.glob(search_pattern)
  
 	if not arti_pred_paths:
@@ -110,18 +119,45 @@ def get_res(damage_type: str, fp_cut: float) -> pl.DataFrame:
 	proportions = calc_arti_prop(arti_pred_paths)
 
 	print(f"FP-cut: {fp_cut}")
-	get_stats(proportions, damage_type=damage_type)
+	get_stats(proportions, damage_type=damage_type, variant_source=variant_source)
 
-	proportions.write_csv(f"{damage_type}_proportions_per_sample.fp-cut_{fp_cut:.0e}.tsv", separator="\t")
+	proportions.write_csv(f"{damage_type}_proportions_per_sample.{variant_source.lower()}.fp-cut_{fp_cut:.0e}.tsv", separator="\t")
 	return proportions
 
-# ## FFPE
-get_res("ffpe", 1e-08)
+# %% [markdown]
+# ## FFPE-VCF
 
-get_res("ffpe", 5e-01)
+# %%
+get_res("vcf", "ffpe", 1e-08)
+
+# %%
+get_res("vcf", "ffpe", 5e-01)
+
+# %% [markdown]
+# ## OxoG-VCF
+
+# %%
+get_res("vcf", "oxog", 1e-08)
+
+# %%
+get_res("vcf", "oxog", 5e-01)
 
 
-# ## OxoG
-get_res("oxog", 1e-08)
+# %% [markdown]
+# ## FFPE-XML
 
-get_res("oxog", 5e-01)
+# %%
+get_res("xml", "ffpe", 5e-01)
+
+# %%
+get_res("xml", "ffpe", 1e-08)
+
+# %% [markdown]
+# ## OxoG-XML
+
+# %%
+get_res("xml", "oxog", 5e-01)
+
+# %%
+get_res("xml", "oxog", 1e-08)
+
