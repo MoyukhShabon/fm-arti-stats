@@ -11,8 +11,8 @@ def assign_if_exist(path: str):
 		return path
 
 # %%
-ffpe_outdir = "ffpe-snvf"
-oxog_outdir = "oxog-snvf"
+ffpe_outdir = "vcf-ffpe-snvf"
+oxog_outdir = "vcf-oxog-snvf"
 
 # %%
 ref_path = os.path.abspath(assign_if_exist("ref/hg19/ucsc.hg19.fasta"))
@@ -35,10 +35,12 @@ vcf_table = pl.DataFrame({
 
 
 bam_vcf_table = bam_table.join(vcf_table, on="sample_name", how = "inner")
+# In cases where a sample has two BAMs, only keep the BAM which is <sample_id>*US<nnnnnnn>.sorted.bam
+bam_vcf_table = bam_vcf_table.filter(~(bam_vcf_table["sample_name"].is_duplicated() & pl.col("bam_path").str.contains("_DNA.bam")))
 bam_vcf_table
 
 # %%
-templates = ["ffpe-snvf/mobsnvf.ffpe.sh.template", "oxog-snvf/mobsnvf.oxog.sh.template"]
+templates = ["vcf-ffpe-snvf/mobsnvf.ffpe.sh.template", "vcf-oxog-snvf/mobsnvf.oxog.sh.template"]
 
 for i, sample_name in enumerate(bam_vcf_table["sample_name"]):
 	print(f"Creating scripts for {sample_name}")

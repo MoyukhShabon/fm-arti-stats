@@ -25,7 +25,7 @@ valid_files <- snvf_paths[!is.na(file_sizes) & file_sizes > 0]
 
 # Save empty files list if any
 if (length(empty_files) > 0) {
-    writeLines(empty_files, "../annot/no_variants.txt")
+    writeLines(empty_files, "../annot/vcf-no_snv.txt")
     message(sprintf("Found %d empty/missing files", length(empty_files)))
 }
 
