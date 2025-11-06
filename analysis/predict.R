@@ -12,6 +12,8 @@ if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
     stop("Invalid --fp.cut; must be a number between 0 and 1")
 }
 
+cat(sprintf("Predicting True Mutations with False-Positive Cutoff: %s \n", format(fp.cut, scientific = TRUE)))
+
 dir.create("../annot", showWarnings=FALSE)
 
 snvf_paths <- Sys.glob("../*/*/*.mobsnvf.*.snv")
@@ -31,7 +33,7 @@ if (length(empty_files) > 0) {
 
 for (path in valid_files){
 
-    message(sprintf("Processing: %s", basename(path)))
+    message(sprintf("Processing: %s", path))
 
     out_path <- gsub("\\.snv", sprintf("\\.pred_fp-cut_%s.tsv", format(fp.cut, scientific = TRUE)), path)
     snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut)
