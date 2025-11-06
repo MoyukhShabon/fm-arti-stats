@@ -12,7 +12,7 @@ if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
     stop("Invalid --fp.cut; must be a number between 0 and 1")
 }
 
-cat(sprintf("Predicting True Mutations with False-Positive Cutoff: %s \n", format(fp.cut, scientific = TRUE)))
+cat(sprintf("Predicting True Mutations with False-Positive Cutoff: %s \n\n", format(fp.cut, scientific = TRUE)))
 
 dir.create("../annot", showWarnings=FALSE)
 
@@ -39,6 +39,6 @@ for (path in valid_files){
     snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut)
 
     qwrite(snv_pred, out_path)
-    message(sprintf("Prediction for %s written to: %s", basename(path), out_path))
+    cat(sprintf("\tPrediction for %s written to: %s\n", basename(path), out_path))
 
 }
