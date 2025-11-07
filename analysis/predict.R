@@ -38,6 +38,12 @@ for (path in valid_files){
     out_path <- gsub("\\.snv", sprintf("\\.pred_fp-cut_%s.tsv", format(fp.cut, scientific = TRUE)), path)
     snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut)
 
+    ## weird edge case where alt col with only T nucleotide is read in as logical.
+    ## col_classes is not used with read.delim to allow annotations i.e flexible number of additional columns
+    if ((typeof(snv_pred$alt) == "logical") & (nrow(snv_pred) > 0)){
+        snv_pred$alt <- "T"
+    }
+
     qwrite(snv_pred, out_path)
     cat(sprintf("\tPrediction for %s written to: %s\n", basename(path), out_path))
 
