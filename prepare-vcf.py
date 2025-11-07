@@ -3,21 +3,17 @@ import os
 import glob
 import polars as pl
 
-# %%
-def assign_if_exist(path: str):
+def assign_if_exist(path: str) -> str:
 	if not os.path.exists(path):
 		raise FileNotFoundError(f"File not found: {path}")
 	else:
 		return path
 
-# %%
 ffpe_outdir = "vcf-ffpe-snvf"
 oxog_outdir = "vcf-oxog-snvf"
 
-# %%
 ref_path = os.path.abspath(assign_if_exist("ref/hg19/ucsc.hg19.fasta"))
 
-# %%
 bam_paths = glob.glob("data/*.bam")
 vcf_paths = glob.glob("data/*.vcf")
 
@@ -33,17 +29,22 @@ vcf_table = pl.DataFrame({
 	"vcf_path": [os.path.abspath(path) for path in vcf_paths]
 })
 
+no_bam = vcf_table.join(bam_table, on="sample_name", how = "anti")
+no_bam.write_csv("annot/vcf-no_bam.tsv", separator = "\t")
 
 bam_vcf_table = bam_table.join(vcf_table, on="sample_name", how = "inner")
 # In cases where a sample has two BAMs, only keep the BAM which is <sample_id>*US<nnnnnnn>.sorted.bam
 bam_vcf_table = bam_vcf_table.filter(~(bam_vcf_table["sample_name"].is_duplicated() & pl.col("bam_path").str.contains("_DNA.bam")))
 bam_vcf_table
 
-# %%
+os.makedirs("annot", exist_ok=True)
+
+bam_vcf_table.write_csv("annot/bam_vcf_path.aboslute.tsv", separator="\t")
+
 templates = ["vcf-ffpe-snvf/mobsnvf.ffpe.sh.template", "vcf-oxog-snvf/mobsnvf.oxog.sh.template"]
 
 for i, sample_name in enumerate(bam_vcf_table["sample_name"]):
-	print(f"Creating scripts for {sample_name}")
+	print(f"Creating scripts for {i+1}. {sample_name}")
 
 	bam_path = bam_vcf_table[i, "bam_path"]
 	vcf_path = bam_vcf_table[i, "vcf_path"]

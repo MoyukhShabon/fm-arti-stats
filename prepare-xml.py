@@ -15,7 +15,6 @@ from mutation_signatures import read_variants
 # %% [markdown]
 # ## Functions
 
-
 def str_to_bool(bool_str: str) -> bool | str:
 	if bool_str.lower() == "true":
 		return True
@@ -23,7 +22,6 @@ def str_to_bool(bool_str: str) -> bool | str:
 		return False
 	else:
 		return bool_str
-
 
 def get_variant_properties(xml_root: etree._Element) -> pl.DataFrame:
 
@@ -40,7 +38,6 @@ def get_variant_properties(xml_root: etree._Element) -> pl.DataFrame:
 		variant_properties.append(properties)
 		
 	return pl.DataFrame(variant_properties)
-
 
 def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFrame:
 	"""
@@ -145,11 +142,6 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
 
 	df = pl.DataFrame(variants_data)
 
-	# ------- VUS Filtration -------
-
-	if exclude_vus:
-		var_properties = get_variant_properties(root).filter(pl.col("is_vus"))
-		df = df.join(var_properties, left_on="protein_effect", right_on="variant_name", how = "anti")
 	
 	# ------- Post-process ------
 	
@@ -184,8 +176,22 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
 		# .otherwise(pl.col("strand"))
 		# .alias("strand"),
 	)
+ 
+	# ------- VUS Annotation -------
+
+	var_properties = get_variant_properties(root).filter(pl.col("is_vus")).select(["is_vus", "variant_name"])
+	df = (
+     	df
+    	.join(var_properties, left_on="protein_effect", right_on="variant_name", how = "left")
+		.with_columns(pl.col("is_vus").fill_null(False))
+	)
+
+	# ------- VUS Exclusion -------
+
+	if exclude_vus:
+		df = df.filter(~pl.col("is_vus"))
 	
-	# ------ formatting -------
+	# ------ Formatting -------
 	
 	chrom_sort_key = (
 		pl.when(pl.col("chrom") == "X").then(pl.lit(23, dtype=pl.Int64))
@@ -198,7 +204,7 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
 	# Ensure column order is consistent
 	schema = [
 		'chrom', 'pos', 'ref', 'alt', 
-		'gene', 'depth', 'cds_effect', 'protein_effect',
+		'gene', 'is_vus', 'depth', 'cds_effect', 'protein_effect',
 		'allele_fraction', 'functional_effect', 
 		'transcript', 'strand', 'equivocal', 
 		# "test_type",
@@ -218,12 +224,10 @@ def assign_if_exist(path: str) -> str:
 # %% [markdown]
 # ## Parse XML to SNV
 
-# %%
 outdir_root = "xml-snvs"
 
 xml_paths = sorted(glob.glob("data/*.xml"))
 
-# %%
 no_variants = []
 
 for i, path in enumerate(xml_paths):
@@ -251,17 +255,18 @@ pl.DataFrame(no_variants).write_csv("annot/xml-no_snv.txt", include_header=False
 # ## Subset XML variants
 # Make a subset of the VCF SNVF results to just retain the variants in the XML. Variant in the XML are a subset of the variants in the VCF
 
-# %%
 no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")["sample_name"].to_list()
 
-# %%
-xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.snv"))
+xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.tsv"))
 mobsnvf_paths = sorted(glob.glob("vcf-ffpe-snvf/*/*.mobsnvf.ffpe.snv") + glob.glob("vcf-oxog-snvf/*/*.mobsnvf.oxog.snv"))
 
-# %%
-def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False) -> pl.DataFrame:
+def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
 	mobsnvf_res = read_variants(mobsnvf_res_path).rename({"fobp":"FOBP"})
-	mobsnvf_res_subset =  mobsnvf_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="semi")
+
+	if annotations:
+		mobsnvf_res_subset =  mobsnvf_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="inner")
+	else:
+		mobsnvf_res_subset =  mobsnvf_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="semi")
 
 	if write_output:
 		outpath = mobsnvf_res_path.replace("vcf", "xml")
@@ -289,7 +294,7 @@ for i, path in enumerate(xml_snv_paths):
 	xml_snvs = read_variants(path, sort_variants=True)
 
 	for mobsnvf_res_path in sample_mobsnvf_path:
-		subset_variants(mobsnvf_res_path, xml_snvs, write_output=True)
+		subset_variants(mobsnvf_res_path, xml_snvs, write_output=True, annotations=True)
 	
 
 
@@ -298,7 +303,6 @@ for i, path in enumerate(xml_snv_paths):
 # # 
 # # Since Variants in XML are a subset of the Variants in the VCF. It is wasteful to rerun artifact filtration
 
-# # %%
 # ffpe_outdir = "xml-ffpe-snvf"
 # oxog_outdir = "xml-oxog-snvf"
 
@@ -328,11 +332,9 @@ for i, path in enumerate(xml_snv_paths):
 # bam_snv_table
 
 
-# # %%
 # os.makedirs("annot", exist_ok=True)
 # bam_snv_table.write_csv("annot/bam_xml-snv_path.aboslute.tsv", separator="\t")
 
-# # %%
 
 # templates = ["xml-ffpe-snvf/mobsnvf.ffpe.sh.template", "xml-oxog-snvf/mobsnvf.oxog.sh.template"]
 
