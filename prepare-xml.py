@@ -270,6 +270,7 @@ def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output:
 
 	if write_output:
 		outpath = mobsnvf_res_path.replace("vcf", "xml")
+		os.makedirs(os.path.dirname(outpath), exist_ok=True)
 		mobsnvf_res_subset.write_csv(outpath, separator="\t")
 
 		print(f"\tXML subset written to : {outpath}")
