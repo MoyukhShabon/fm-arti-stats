@@ -52,7 +52,7 @@ def annotate_mobsnvf_res(mobsnvf_res_path: str, annotated_snvs: pl.DataFrame) ->
 # %% [markdown]
 # ### VUS exclusion
 
-no_bam_list = pl.read_csv("annot/xml-no_bam.tsv", separator="\t")
+no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")
 xml_snv_annot_paths = sorted(glob.glob('xml-snvs/*/*.tsv'))
 
 
