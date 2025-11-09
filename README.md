@@ -37,11 +37,19 @@ These predictions are then used to calculate the proportion of artifacts in each
 
 ## Observations
 
-The BAM headers states that read are aligned against the hg19 reference. Therefore the UCSC hg19 reference was downloaded from the broad institute.
+1. The BAM headers states that read are aligned against the hg19 reference. Therefore the UCSC hg19 reference was downloaded from the broad institute.
 
 ```
 gs://gatk-legacy-bundles
 ```
+
+2. Some Samples have no associated BAMs. These samples are skipped.
+
+3. Some Samples have no variants. These samples are also skipped.
+
+4. Some sample have no variants after excluding VUS variants. These samples are skipped during analysis of the VUS set. 
+
+5. The some variants in the XML are from the - strand. The reference and alternate alleles were substituted with their complementary nucleotides during parsing to SNV table to match up with the hg19 reference genome.
 
 
 ## Replication
@@ -60,7 +68,7 @@ Navigate to the `ref` directory and run:
 bash get.sh
 ```
 
-3. Navigate to the repository root and run `prepare-vcf.py` and `prepare-xml.py`
+3. Navigate to the repository root and run `prepare-vcf.py`.
 
 
 ```bash
@@ -70,9 +78,7 @@ python prepare-xml.py
 
 This will create batch scripts for FFPE and OxoG artifact filtering in the `vcf-ffpe-snvf` and `vcf-oxog-snvf` directories respectively based on the BAM and VCF data available in the `data` directory.
 
-Similarly, batch scripts will also be created in the `xml-ffpe-snvf` and `xml-oxog-snvf` directories based on the BAMs and SNV information contained within the XMLs.
-
-The variant data parsed from the XML are saved in a tabular format in the `xml-snvs`. The a `<sample_name>.tsv` and `<sample_name.snv>` file is created based on for each sample's representative XML. The SNV file only contains variant info i.e CHROM, POS, REF, and ALT columns. The TSV file includes additional information such as Allele Fraction, Gene, Protein Effect, Strand, Functional Effect etc.
+Samples without associated BAMs are saved to the `annot` directory.
 
 4. Navigate to `vcf-ffpe-snvf` directory and run `filter.sh` to perform MOSBNVF filtering for FFPE artifacts on the variants present in the VCFs.
 
@@ -86,31 +92,41 @@ The variant data parsed from the XML are saved in a tabular format in the `xml-s
     bash filter.sh
 ```
 
-6. Navigate to `xml-ffpe-snvf` directory and run `filter.sh` to perform MOSBNVF filtering for FFPE artifacts on the variants present in the XMLs.
+6. Navigate to the repository root and run `prepare-xml.py`.
 
-```bash
-    bash filter.sh
-```
+This does two things. First, The variant data parsed from the XML are saved in a tabular format in the `xml-snvs` directory. Each samples will have two associated files `<sample_name>.tsv` which is a table containing the SNVs with their respective annotations such as Allele Fraction, Gene, Protein Effect, Strand, Functional Effect etc. Along with a `<sample_name>.snv` which is a table containing just the SNVs from the XML. Indels in in the XML are ignored. This is done via regular expression pattern matching.
 
-7. Navigate to the `xml-oxog-snvf` directory and run `filter.sh` to perform MOSBNVF filtering for OxoG artifacts on the variants present in the XMLs.
+Second, a subset is made from MOBSNVF results for FFPE and OXOG filtering performed on the VCF, based on the SNVs parsed from the XML. This is because the XMLs contain a subset of the variants in the VCF. The results for FFPE and OXOG artifact filtering are saved to the `xml-ffpe-snvf` and the `xml-oxog-snvf` directory respectively.
 
-```bash
-    bash filter.sh
-```
 
-8. Navigate to the `analysis` directory and run `predict.R` with specific values of fp-cut.
+7. Navigate to the repository root and run `predict.R` with specific values of fp-cut. From our testing fp.cut of 1e-08 was found to be a good cutoff giving a balanced tradeoff between precision and recall.
 
 ```
 Rscript predict.R --fp.cut 0.5
 Rscript predict.R --fp.cut 1e-08
 ```
 
-This creates predictions based on the specified False Positive Cut threshold applied after FDR correcting the scores of MOBSNVF. The predictions are saved to the same directories as the MOBSNVF results mentioned in step 4-7.
+This creates predictions based on the specified False Positive Cut threshold applied after FDR correcting the scores of MOBSNVF. The predictions are saved to the same directories as the MOBSNVF results mentioned in step 4-6.
 
 
-9. Run the `proportions.py` under the same analysis directory:
+8. Navigate to the `analysis` directory and run the `proportions.py`:
 
 This calculates the proportion of artifacts in each sample and gives an overall summary. The table with the proportions are saved in the same directory. E.g. `ffpe_proportions_per_sample.xml.fp-cut_1e-08.tsv`, `oxog_proportions_per_sample.vcf.fp-cut_5e-01.tsv` etc.
+
+9. From the `analysis` directory run `collect-artifacts.py`:
+
+```
+python collect-artifacts.py
+```
+
+This will create a table named `all_artifacts.mobsnvf.pred_fp-cut_<fp.cut>.tsv`. This includes all the FFPE and OXOG SNV artifacts detected in the VCFs and XMLs.
+
+**To Do:** Add functionality to the python script for the FP-Cut to be passed in as an argument. As of right now an fp-cut of 1e-08 is used.
+
+### Secondary analyses:
+
+A notebook named `vcf_xml_concordance.ipynb` is present in the analysis directory to check the variants present in the VCF what are or are not present in the XML and vice versa. The analysis reveals that the XML variants are a true subset of the VCF variants. 
+
 
 ## Issues
 
