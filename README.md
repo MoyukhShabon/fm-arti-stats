@@ -98,8 +98,19 @@ This does two things. First, The variant data parsed from the XML are saved in a
 
 Second, a subset is made from MOBSNVF results for FFPE and OXOG filtering performed on the VCF, based on the SNVs parsed from the XML. This is because the XMLs contain a subset of the variants in the VCF. The results for FFPE and OXOG artifact filtering are saved to the `xml-ffpe-snvf` and the `xml-oxog-snvf` directory respectively.
 
+Samples where XMLs have no SNVs are saved to `annot/xml-no_snvs.txt`.
 
-7. Navigate to the repository root and run `predict.R` with specific values of fp-cut. From our testing fp.cut of 1e-08 was found to be a good cutoff giving a balanced tradeoff between precision and recall.
+7. From the repository root run `filter-vus.py`
+
+```
+python filter-vus.py
+```
+
+This will create a stratify the FFPE and OXOG artifact filtering results excluding the variants of uncertain significance (VUS). The the stratified results are saved to the same directory as the each sample's results.
+
+List of samples which have no SNVs after VUS exclusion are saved to `annot/xml-no_snv-vus_filtration.txt`
+
+8. Navigate to the repository root and run `predict.R` with specific values of fp-cut. From our testing fp.cut of 1e-08 was found to be a good cutoff giving a balanced tradeoff between precision and recall.
 
 ```
 Rscript predict.R --fp.cut 0.5
@@ -109,11 +120,11 @@ Rscript predict.R --fp.cut 1e-08
 This creates predictions based on the specified False Positive Cut threshold applied after FDR correcting the scores of MOBSNVF. The predictions are saved to the same directories as the MOBSNVF results mentioned in step 4-6.
 
 
-8. Navigate to the `analysis` directory and run the `proportions.py`:
+9. Navigate to the `analysis` directory and run the `proportions.py`:
 
 This calculates the proportion of artifacts in each sample and gives an overall summary. The table with the proportions are saved in the same directory. E.g. `ffpe_proportions_per_sample.xml.fp-cut_1e-08.tsv`, `oxog_proportions_per_sample.vcf.fp-cut_5e-01.tsv` etc.
 
-9. From the `analysis` directory run `collect-artifacts.py`:
+10. From the `analysis` directory run `collect-artifacts.py`:
 
 ```
 python collect-artifacts.py
