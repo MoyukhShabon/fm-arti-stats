@@ -2,7 +2,7 @@
 
 library(io)
 library(argparser)
-source("../../common-ffpe-snvf/R/eval.R")
+source("common-ffpe-snvf/R/eval.R")
 
 p <- arg_parser("Predict Artifactual SNVs via a FDR adjusted False Positive threshold")
 p <- add_argument(p, "--fp.cut", help = "False positive cutoff (numeric, between 0 and 1)", default = 0.5)
@@ -14,9 +14,9 @@ if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
 
 cat(sprintf("Predicting True Mutations with False-Positive Cutoff: %s \n\n", format(fp.cut, scientific = TRUE)))
 
-dir.create("../annot", showWarnings=FALSE)
+dir.create("annot", showWarnings=FALSE)
 
-snvf_paths <- Sys.glob("../*/*/*.mobsnvf.*.snv")
+snvf_paths <- Sys.glob("*/*/*.mobsnvf.*.snv")
 
 # Get file info for all paths at once
 file_sizes <- file.info(snvf_paths)$size
@@ -31,9 +31,9 @@ if (length(empty_files) > 0) {
     message(sprintf("Found %d empty/missing files", length(empty_files)))
 }
 
-for (path in valid_files){
-
-    message(sprintf("Processing: %s", path))
+for (i in seq_len(length(valid_files))){
+    path = valid_files[i]
+    message(sprintf("%s. Processing: %s", i, path))
 
     out_path <- gsub("\\.snv", sprintf("\\.pred_fp-cut_%s.tsv", format(fp.cut, scientific = TRUE)), path)
     snv_pred <- fdr_cut_pred(read.delim(path), "FOBP", fp.cut)

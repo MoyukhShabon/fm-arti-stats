@@ -104,7 +104,7 @@ for i, path in enumerate(xml_snv_annot_paths):
 	mobsnvf_oxog_no_vus.write_csv(oxog_snvf_path.replace(".snv", ".no_vus.snv"), separator="\t")
 
    
-pl.DataFrame(no_variants).write_csv("annot/xml-no_snv-vus_filtration", separator="\t", include_header=False)
+pl.DataFrame(no_variants).write_csv("annot/xml-no_snv-vus_filtration.txt", separator="\t", include_header=False)
 	
 
 
