@@ -179,12 +179,17 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
  
 	# ------- VUS Annotation -------
 
-	var_properties = get_variant_properties(root).filter(pl.col("is_vus")).select(["is_vus", "variant_name"])
-	df = (
-     	df
-    	.join(var_properties, left_on="protein_effect", right_on="variant_name", how = "left")
-		.with_columns(pl.col("is_vus").fill_null(False))
-	)
+	var_properties = get_variant_properties(root)
+	
+	if not var_properties.is_empty():
+		var_properties = var_properties.filter(pl.col("is_vus")).select(["is_vus", "variant_name"])
+		df = (
+			df
+			.join(var_properties, left_on="protein_effect", right_on="variant_name", how = "left")
+			.with_columns(pl.col("is_vus").fill_null(False))
+		)
+	else:
+		df = df.with_columns(pl.lit(False).alias("is_vus"))
 
 	# ------- VUS Exclusion -------
 
@@ -299,66 +304,66 @@ for i, path in enumerate(xml_snv_paths):
 	
 
 
-# # %% [markdown]
-# # ## Make FFPE-SNVF scripts (Not preferred)
-# # 
-# # Since Variants in XML are a subset of the Variants in the VCF. It is wasteful to rerun artifact filtration
+# %% [markdown]
+# ## Make FFPE-SNVF scripts (Not preferred)
+# 
+# Since Variants in XML are a subset of the Variants in the VCF. It is wasteful to rerun artifact filtration
 
-# ffpe_outdir = "xml-ffpe-snvf"
-# oxog_outdir = "xml-oxog-snvf"
+ffpe_outdir = "xml-ffpe-snvf"
+oxog_outdir = "xml-oxog-snvf"
 
-# ref_path = os.path.abspath(assign_if_exist("ref/hg19/ucsc.hg19.fasta"))
+ref_path = os.path.abspath(assign_if_exist("ref/hg19/ucsc.hg19.fasta"))
 
-# bam_paths = sorted(glob.glob("data/*.bam"))
-# snv_paths = sorted(glob.glob("xml-snvs/*/*.snv"))
-
-
-# bam_table = pl.DataFrame({
-# 	"sample_name" : [os.path.basename(path).split("*")[0].split("_")[0] for path in bam_paths],	
-# 	"bam_path": [os.path.abspath(path) for path in bam_paths]
-# })
+bam_paths = sorted(glob.glob("data/*.bam"))
+snv_paths = sorted(glob.glob("xml-snvs/*/*.snv"))
 
 
-# snv_table = pl.DataFrame({
-# 	"sample_name" : [os.path.basename(path).removesuffix(".snv") for path in snv_paths],	
-# 	"snv_path": [os.path.abspath(path) for path in snv_paths]
-# })
-
-# no_bam = snv_table.join(bam_table, on="sample_name", how = "anti")
-# no_bam.write_csv("annot/xml-no_bam.tsv", separator="\t")
-
-# bam_snv_table = bam_table.join(snv_table, on="sample_name", how = "inner")
-# # In cases where a sample has two BAMs, only keep the BAM which is <sample_id>*US<nnnnnnn>.sorted.bam
-# bam_snv_table = bam_snv_table.filter(~(bam_snv_table["sample_name"].is_duplicated() & pl.col("bam_path").str.contains("_DNA.bam")))
-# bam_snv_table
+bam_table = pl.DataFrame({
+	"sample_name" : [os.path.basename(path).split("*")[0].split("_")[0] for path in bam_paths],	
+	"bam_path": [os.path.abspath(path) for path in bam_paths]
+})
 
 
-# os.makedirs("annot", exist_ok=True)
-# bam_snv_table.write_csv("annot/bam_xml-snv_path.aboslute.tsv", separator="\t")
+snv_table = pl.DataFrame({
+	"sample_name" : [os.path.basename(path).removesuffix(".snv") for path in snv_paths],	
+	"snv_path": [os.path.abspath(path) for path in snv_paths]
+})
+
+no_bam = snv_table.join(bam_table, on="sample_name", how = "anti")
+no_bam.write_csv("annot/xml-no_bam.tsv", separator="\t")
+
+bam_snv_table = bam_table.join(snv_table, on="sample_name", how = "inner")
+# In cases where a sample has two BAMs, only keep the BAM which is <sample_id>*US<nnnnnnn>.sorted.bam
+bam_snv_table = bam_snv_table.filter(~(bam_snv_table["sample_name"].is_duplicated() & pl.col("bam_path").str.contains("_DNA.bam")))
+bam_snv_table
 
 
-# templates = ["xml-ffpe-snvf/mobsnvf.ffpe.sh.template", "xml-oxog-snvf/mobsnvf.oxog.sh.template"]
+os.makedirs("annot", exist_ok=True)
+bam_snv_table.write_csv("annot/bam_xml-snv_path.aboslute.tsv", separator="\t")
 
-# for i, sample_name in enumerate(bam_snv_table["sample_name"]):
-# 	print(f"Creating scripts for {sample_name}")
 
-# 	bam_path = bam_snv_table[i, "bam_path"]
-# 	snv_path = bam_snv_table[i, "snv_path"]
+templates = ["xml-ffpe-snvf/mobsnvf.ffpe.sh.template", "xml-oxog-snvf/mobsnvf.oxog.sh.template"]
 
-# 	for template in templates:
+for i, sample_name in enumerate(bam_snv_table["sample_name"]):
+	print(f"Creating scripts for {sample_name}")
+
+	bam_path = bam_snv_table[i, "bam_path"]
+	snv_path = bam_snv_table[i, "snv_path"]
+
+	for template in templates:
 	
-# 		filtered_outdir = os.path.abspath(f"{template.split("/")[0]}")
-# 		script_outdir = f"{filtered_outdir}/scripts"
-# 		os.makedirs(script_outdir, exist_ok=True)
+		filtered_outdir = os.path.abspath(f"{template.split("/")[0]}")
+		script_outdir = f"{filtered_outdir}/scripts"
+		os.makedirs(script_outdir, exist_ok=True)
 		
-# 		with open(template, "r") as t:
-# 			script = t.read()
+		with open(template, "r") as t:
+			script = t.read()
 
-# 		new_script = script.replace("$1", bam_path).replace("$2", snv_path).replace("$3", ref_path).replace("$4", f"{filtered_outdir}/{sample_name}")
+		new_script = script.replace("$1", bam_path).replace("$2", snv_path).replace("$3", ref_path).replace("$4", f"{filtered_outdir}/{sample_name}")
 
-# 		script_outpath = f"{script_outdir}/{sample_name}.sh"
+		script_outpath = f"{script_outdir}/{sample_name}.sh"
 
-# 		with open(script_outpath, "w") as f:
-# 			f.write(new_script)
+		with open(script_outpath, "w") as f:
+			f.write(new_script)
 
 
