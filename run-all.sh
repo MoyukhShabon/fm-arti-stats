@@ -10,11 +10,12 @@ cd -
 echo -e "\nPreparing VCF SNVF scripts \n"
 python prepare-vcf.py
 
-echo -e "\nRunning VCF SNVF\n"
+echo -e "\nRunning VCF FFPE SNVF\n"
 cd vcf-ffpe-snvf/scripts
 dlazy .
 cd -
 
+echo -e "\nRunning VCF OXOG SNVF\n"
 cd vcf-oxog-snvf/scripts
 dlazy .
 cd -
