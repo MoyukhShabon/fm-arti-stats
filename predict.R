@@ -5,7 +5,7 @@ library(argparser)
 source("common-ffpe-snvf/R/eval.R")
 
 p <- arg_parser("Predict Artifactual SNVs via a FDR adjusted False Positive threshold")
-p <- add_argument(p, "--fp.cut", help = "False positive cutoff (numeric, between 0 and 1)", default = 0.5)
+p <- add_argument(p, "--fp.cut", help = "False positive cutoff (numeric, between 0 and 1)", default = 1e-08)
 argv <- parse_args(p)
 fp.cut <- as.numeric(argv$fp.cut)
 if (is.na(fp.cut) || fp.cut < 0 || fp.cut > 1) {
