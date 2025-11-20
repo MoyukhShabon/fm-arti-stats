@@ -3,6 +3,14 @@ import glob
 import os
 import polars as pl
 from lxml import etree
+import argparse
+
+# %% [markdown]
+# ### Parsed Arguments
+
+parser = argparse.ArgumentParser(description="Collect artifacts that was predicted upstream with an specified fp-cut")
+parser.add_argument("--fp-cut", "-c", default=1e-08, help="The False Positive Cutoff (fp-cut) value which was used to make predictions")
+args = parser.parse_args()
 
 # %% [markdown]
 # ### Useful Stuff
@@ -62,7 +70,9 @@ def get_test_type(xml_path: int) -> str:
 # %% [markdown]
 # ### Artifact Collection
 
-fp_cut = 1e-08
+fp_cut = float(args.fp_cut)
+
+print(f"Compiling artifacts predicted with fp.cut = {fp_cut:.0e}\n")
 
 # Path to MOBSNVF predictions
 pred_paths = glob.glob(f"../*/*/*.mobsnvf.ffpe.pred_fp-cut_{fp_cut:.0e}.tsv") + glob.glob(f"../*/*/*.mobsnvf.oxog.pred_fp-cut_{fp_cut:.0e}.tsv")
@@ -109,5 +119,7 @@ all_artifacts = (
 	.drop("chrom_n")
 )
 
-all_artifacts.write_csv("all_artifacts.mobsnvf.pred_fp-cut_1e-08.tsv", separator="\t")
+outdir = f"all_artifacts.mobsnvf.pred_fp-cut_{fp_cut:.0e}.tsv"
+all_artifacts.write_csv(outdir, separator="\t")
 
+print(f"\nTable with suspected artifacts written to: {outdir}")
