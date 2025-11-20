@@ -27,13 +27,18 @@ python filter_vus.py
 
 
 echo -e "\nPredicting Artifacts \n"
-Rscript predict.R
+Rscript predict.R 
 Rscript predict.R --fp.cut 1e-08
+
 
 echo -e "\nCalculating Proportion of artifacts per sample \n"
 cd analysis
 python proportion.py | tee summary_statistics.txt
 
-echo -e "\ncoCollecting all artifacts into a table \n"
+echo -e "\nCombining artifact proportion tables \n"
+python compilation.py
+
+echo -e "\nCollecting all artifacts into a table \n"
 python collect-artifacts.py
+python collect-artifacts.py --fp-cut 0.5
 
