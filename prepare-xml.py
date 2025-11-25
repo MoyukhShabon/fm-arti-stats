@@ -233,7 +233,17 @@ outdir_root = "xml-snvs"
 
 xml_paths = sorted(glob.glob("data/*.xml"))
 
-no_variants = []
+xml_table = pl.DataFrame({
+	"sample_name": [os.path.basename(p).replace(".xml", "") for p in xml_paths],
+	"xml_path": [os.path.abspath(p) for p in xml_paths]
+})
+
+bam_vcf_table = pl.read_csv("annot/bam_vcf_path.absolute.tsv", separator="\t")
+
+bam_xml_table = bam_vcf_table.join(xml_table, on="sample_name", how="inner")
+bam_xml_table.write_csv("annot/bam_xml_path.absolute.tsv", separator="\t")
+
+no_snv = []
 
 for i, path in enumerate(xml_paths):
 	
@@ -247,14 +257,20 @@ for i, path in enumerate(xml_paths):
 	
 	if snvs.is_empty():
 		print(f'Dataframe for "{sample_name}" is empty. Skipping writing to disk')
-		no_variants.append(path)
+		no_snv.append(
+			pl.DataFrame({"sample_name": [sample_name], "xml_path": [path]})
+		)
 		continue
  
 	snvs.write_csv(f"{outpath}/{sample_name}.tsv", separator="\t")
 	snvs.select(["chrom", "pos", "ref", "alt"]).write_csv(f"{outpath}/{sample_name}.snv", separator="\t")
 
-pl.DataFrame(no_variants).write_csv("annot/xml-no_snv.txt", include_header=False, separator="\t")
+no_snv = pl.concat(no_snv)
+no_snv.write_csv("annot/xml-no_snv.tsv", include_header=False, separator="\t")
 
+with_snv_with_bam = bam_xml_table.join(no_snv, on="sample_name", how="anti")
+xml_no_snv_no_bam = xml_table.join(with_snv_with_bam, on="sample_name", how="anti")
+xml_no_snv_no_bam.write_csv("annot/xml-no_snv-no_bam.tsv", include_header=False, separator="\t")
 
 # %% [markdown]
 # ## Subset XML variants
