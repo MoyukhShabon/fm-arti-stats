@@ -3,21 +3,17 @@ import os
 import glob
 import polars as pl
 
-# %%
 def return_path_if_exists(path: str) -> str:
 	if not os.path.exists(path):
 		raise FileNotFoundError(f"File not found: {path}")
 	else:
 		return path
 
-# %%
 ffpe_outdir = "vcf-ffpe-snvf"
 oxog_outdir = "vcf-oxog-snvf"
 
-# %%
 ref_path = os.path.abspath(return_path_if_exists("ref/hg19/ucsc.hg19.fasta"))
 
-# %%
 ## Get BAM and VCF paths
 bam_paths = sorted(glob.glob("data/*.bam"))
 vcf_paths = sorted(glob.glob("data/*.vcf"))
@@ -55,6 +51,10 @@ print(f"Found {vcf_no_variants.height} VCFs with no variants \nTable written to 
 no_bam = vcf_table.join(bam_table, on="sample_name", how = "anti")
 no_bam.write_csv("annot/vcf-no_bam.tsv", separator = "\t")
 
+# get a list of VCFs without both BAM and variants
+no_bam_no_variant = pl.concat([no_bam, vcf_no_variants]).unique(subset=["sample_name"])
+no_bam_no_variant.write_csv("annot/vcf-no_bam-no_variant.tsv", separator = "\t")
+
 ## Join BAM and VCF tables to get only samples with both BAM and VCF
 bam_vcf_table = bam_table.join(vcf_table, on="sample_name", how = "inner")
 
@@ -62,13 +62,8 @@ bam_vcf_table = bam_table.join(vcf_table, on="sample_name", how = "inner")
 bam_vcf_table = bam_vcf_table.filter(~(bam_vcf_table["sample_name"].is_duplicated() & pl.col("bam_path").str.contains("_DNA.bam")))
 ## Remove samples with no variants from bam_vcf_table
 bam_vcf_table = bam_vcf_table.join(vcf_no_variants, on="sample_name", how="anti")
-bam_vcf_table
-
-# %%
-os.makedirs("annot", exist_ok=True)
 bam_vcf_table.write_csv("annot/bam_vcf_path.absolute.tsv", separator="\t")
 
-# %%
 ## list containing path to MOBSNVF OXOG and FFPE templates
 templates = ["vcf-ffpe-snvf/mobsnvf.ffpe.sh.template", "vcf-oxog-snvf/mobsnvf.oxog.sh.template"]
 
