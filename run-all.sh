@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# set -euo pipefail
-
 echo -e "linking Foundation medicine data to data/ directory \n"
 cd data
 bash link.sh
 cd -
+
+set -euo pipefail
 
 echo -e "\nPreparing VCF SNVF scripts \n"
 python prepare-vcf.py
@@ -29,7 +29,7 @@ python filter_vus.py
 
 echo -e "\nPredicting Artifacts \n"
 Rscript predict.R 
-Rscript predict.R --fp.cut 1e-08
+Rscript predict.R --fp.cut 5e-01
 
 
 echo -e "\nCalculating Proportion of artifacts per sample \n"
