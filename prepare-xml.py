@@ -23,6 +23,21 @@ def str_to_bool(bool_str: str) -> bool | str:
 	else:
 		return bool_str
 
+def return_path_if_exists(path: str) -> str:
+	if not os.path.exists(path):
+		raise FileNotFoundError(f"File not found: {path}")
+	else:
+		return path
+
+
+def snv_filter(df: pl.DataFrame) -> pl.DataFrame:
+	# Filter for SNVs only: Length of Ref and Alt must be 1
+	df = df.filter(
+		(pl.col("ref").str.len_chars() == 1) & 
+		(pl.col("alt").str.len_chars() == 1)
+	)
+	return df
+
 def get_variant_properties(xml_root: etree._Element) -> pl.DataFrame:
 
 	variant_properties = []
@@ -39,145 +54,115 @@ def get_variant_properties(xml_root: etree._Element) -> pl.DataFrame:
 		
 	return pl.DataFrame(variant_properties)
 
-def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFrame:
+def parse_variants_from_xml(xml_path: str, exclude_vus: bool = False, include_indels: bool = False) -> pl.DataFrame:
 	"""
-	Parses an XML report to extract Single Nucleotide Variants (SNVs) and
-	returns them as a Polars DataFrame.
-
-	This function identifies SNVs by parsing the 'cds-effect' attribute 
-	searching for a single nucleotide change (e.g., '829G>A').
-	This excludes INDELs (insertions/deletions) and other complex variants.
+	Parses an XML report to extract variants and enriches them with REF/ALT alleles 
+	from a companion VCF file located in the same directory.
 
 	Args:
 		xml_path: The file path to the input XML report.
+		exclude_vus: If True, filters out variants marked as VUS.
+		include_indels: If True, returns SNVs and INDELs. If False, filters for SNVs only.
 
 	Returns:
-		A Polars DataFrame containing the parsed SNVs with columns:
-		'chrom', 'pos', 'ref', 'alt', 'gene', 'depth', 'protein_effect',
-		'allele_fraction', 'functional_effect', and 'transcript'.
-		Returns an empty DataFrame if no SNVs are found.
+		A Polars DataFrame containing the parsed variants.
 	"""
 
-	# ---- Setup ---
+	# ---- 1. Load and Prep VCF ----
+	vcf_path = xml_path.replace(".xml", ".vcf")
+	
+	if not os.path.exists(vcf_path):
+		raise FileNotFoundError(f"Companion VCF not found at {vcf_path}")
 
-	if not os.path.exists(xml_path):
-		raise FileNotFoundError(f"No file found at {xml_path}")
+	# Read VCF, strip '#' from headers, lowercase columns
+	vcf = pl.read_csv(
+		vcf_path, 
+		comment_prefix="##", 
+		separator="\t", 
+		infer_schema_length=1000,
+		null_values=['.'],
+		columns=["#CHROM", "POS", "REF", "ALT"]
+	).rename(lambda x: x.strip("#").lower())
 
+	# ---- 2. Parse XML Annotations ----
 	try:
 		tree = etree.parse(xml_path)
 		root = tree.getroot()
 	except etree.XMLSyntaxError as e:
 		raise ValueError(f"Error parsing XML file: {e}")
 
-
-	# The <variant-report> and its children use a default namespace.
-	# We must define a prefix (e.g., 'vr') to use in our XPath queries.
 	namespaces = {
 		'vr': 'http://foundationmedicine.com/compbio/variant-report-external'
 	}
 
-	# ---- SNV extraction -----
-	variants_data = []
+	xml_variants_data = []
 
-	# Regex is used to identify SNVs from a cds-effect string within the XML (e.g., cds_effect"829G>A").
-	# It captures a single reference nucleotide [ACGTN] followed by '>' and a single alternate nucleotide [ACGTN]. 
-	# This inherently filters out 'ins' and 'del'.
-	# Note: lxml automatically handles XML entities, so '829G&gt;A' is read as '829G>A'.
-	snv_regex = re.compile(r'^[\d\+\-\*\_]+([ACGTN])>([ACGTN])$')
-
-	# Use XPath to find all 'short-variant' elements within the defined namespace.
+	# Use XPath to find all 'short-variant' elements
 	for variant in root.xpath('.//vr:short-variant', namespaces=namespaces):
 		cds_effect_str = variant.get('cds-effect')
 		position_str = variant.get('position')
 		equivocal_str = variant.get('equivocal')
 
-		# Ensure essential attributes are present before proceeding
 		if not all([position_str, cds_effect_str]):
 			continue
 
-		# --- SNV Filtering and Parsing ---
-		# Use the regex to check if the cds-effect describes a simple SNV.
-		match = snv_regex.match(cds_effect_str)
-		
-		# If it's a match, we've found an SNV.
-		if match:
-			try:
-				# The regex match gives us REF and ALT directly.
-				ref, alt = match.groups()
+		try:
+			# Parse chromosome and position from XML (e.g., "chr7:140453136")
+			chrom, pos_str = position_str.split(':')
+			pos = int(pos_str)
 
-				# Parse chromosome and position
-				chrom, pos_str = position_str.split(':')
-				pos = int(pos_str)
-				# is_equivocal = str_to_bool(equivocal_str.lower())
+			variant_dict = {
+				'chrom': chrom,
+				'pos': pos,
+				# 'ref' and 'alt' will come from VCF join
+				'gene': variant.get('gene'),
+				'depth': int(variant.get('depth')),
+				'cds_effect': cds_effect_str,
+				'protein_effect': variant.get('protein-effect'),
+				'allele_fraction': float(variant.get('allele-fraction')),
+				'functional_effect': variant.get('functional-effect'),
+				'transcript': variant.get('transcript'),
+				'strand': variant.get('strand'),
+				'equivocal': str_to_bool(equivocal_str),
+			}
+			xml_variants_data.append(variant_dict)
 
-				# Extract other relevant information, converting types where necessary
-				variant_dict = {
-					'chrom': chrom,
-					'pos': pos,
-					'ref': ref,
-					'alt': alt,
-					'gene': variant.get('gene'),
-					'depth': int(variant.get('depth')),
-					'cds_effect': cds_effect_str,
-					'protein_effect': variant.get('protein-effect'),
-					'allele_fraction': float(variant.get('allele-fraction')),
-					'functional_effect': variant.get('functional-effect'),
-					'transcript': variant.get('transcript'),
-					'strand': variant.get('strand'),
-					'equivocal': str_to_bool(equivocal_str.lower()),
-					# 'test_type': root.xpath("//TestType")[0].text
-				}
-				variants_data.append(variant_dict)
+		except (ValueError, IndexError) as e:
+			print(f"\tSkipping variant due to parsing error: {etree.tostring(variant)}")
+			continue
 
-			except (ValueError, IndexError):
-				# Skip this variant if parsing fails (e.g., malformed position)
-				print(f"Skipping variant due to parsing error: {etree.tostring(variant)}")
-				continue
+	if not xml_variants_data:
+		print(f"\tNo variants detected in XML: {xml_path}")
+		return pl.DataFrame(), pl.DataFrame()
+
+	df_xml = pl.DataFrame(xml_variants_data)
+
+	# ---- 3. Merge XML and VCF ----
 	
-
-	if not variants_data:
-		print(f"No SNVs detected: {xml_path}")
-		return pl.DataFrame() # Return an empty DataFrame if no SNVs were found
-
-
-	df = pl.DataFrame(variants_data)
-
-	
-	# ------- Post-process ------
-	
-	# For SNVs to line up with the reference, we need to make sure that the Alleles represent the nucleotide in the + strand
-	
-	complement_map = {
-		"A":"T",
-		"T":"A",
-		"C":"G",
-		"G":"C"
-	}
-	
-	df = df.with_columns(
-		pl.when(pl.col("strand") == "-")
-		.then(
-			pl.col("ref").str.to_uppercase().map_elements(lambda x: complement_map.get(x, x), return_dtype=str)
-		)
-		.otherwise(pl.col("ref"))
-		.alias("ref"),
-		
-		pl.when(pl.col("strand") == "-")
-		.then(
-			pl.col("alt").str.to_uppercase().map_elements(lambda x: complement_map.get(x, x), return_dtype=str)
-		)
-		.otherwise(pl.col("alt"))
-		.alias("alt"),
-		
-		# pl.when(pl.col("strand") == "-")
-		# .then(
-		# 	pl.lit("+")
-		# )
-		# .otherwise(pl.col("strand"))
-		# .alias("strand"),
+	# Handle cases where VCF does not have variants present in XML. This should in theory never happen.
+	var_missing_in_vcf = (
+    	df_xml
+    	.join(vcf, on=["chrom", "pos"], how="anti")
+    	.with_columns(pl.lit(os.path.basename(xml_path).replace(".xml", "")).alias("sample_name"))
 	)
- 
-	# ------- VUS Annotation -------
+
+	if var_missing_in_vcf.height > 0:
+		print(f"\tWarning: {var_missing_in_vcf.height} variants from XML not found in VCF.")
+	
+	# Left join XML variants with VCF to get genomic REF/ALT
+	# We join on Chrom and Pos. 
+	df = df_xml.join(
+		vcf, 
+		on=["chrom", "pos"], 
+		how="left"
+	)
+
+	# ---- 4. Indel Filtering ----
+	
+	if not include_indels:
+		df = snv_filter(df)
+
+	# ---- 5. VUS Annotation ----
 
 	var_properties = get_variant_properties(root)
 	
@@ -185,19 +170,20 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
 		var_properties = var_properties.filter(pl.col("is_vus")).select(["is_vus", "variant_name"])
 		df = (
 			df
-			.join(var_properties, left_on="protein_effect", right_on="variant_name", how = "left")
+			.join(var_properties, left_on="protein_effect", right_on="variant_name", how="left")
 			.with_columns(pl.col("is_vus").fill_null(False))
 		)
 	else:
 		df = df.with_columns(pl.lit(False).alias("is_vus"))
 
-	# ------- VUS Exclusion -------
+	# ---- 6. VUS Exclusion ----
 
 	if exclude_vus:
 		df = df.filter(~pl.col("is_vus"))
 	
-	# ------ Formatting -------
+	# ---- 7. Formatting ----
 	
+	# Here we keep normalized numbers/letters but sort numerically.
 	chrom_sort_key = (
 		pl.when(pl.col("chrom") == "X").then(pl.lit(23, dtype=pl.Int64))
 		.when(pl.col("chrom") == "Y").then(pl.lit(24, dtype=pl.Int64))
@@ -206,25 +192,18 @@ def parse_snvs_from_xml(xml_path: str, exclude_vus: bool = False) -> pl.DataFram
 		.fill_null(99) # Place any other contigs at the very end
 	)
 	
-	# Ensure column order is consistent
 	schema = [
 		'chrom', 'pos', 'ref', 'alt', 
 		'gene', 'is_vus', 'depth', 'cds_effect', 'protein_effect',
 		'allele_fraction', 'functional_effect', 
-		'transcript', 'strand', 'equivocal', 
-		# "test_type",
+		'transcript', 'strand', 'equivocal',
 	]
-	df = df.select(schema).sort(chrom_sort_key, pl.col("pos"))
 	
-	return df
-
-
-def assign_if_exist(path: str) -> str:
-	if not os.path.exists(path):
-		raise FileNotFoundError(f"File not found: {path}")
-	else:
-		return path
-
+	# Select columns, ensuring they exist
+	final_cols = [c for c in schema if c in df.columns]
+	df = df.select(final_cols).sort(chrom_sort_key, pl.col("pos"))
+	
+	return df, var_missing_in_vcf
 
 # %% [markdown]
 # ## Parse XML to SNV
@@ -243,7 +222,8 @@ bam_vcf_table = pl.read_csv("annot/bam_vcf_path.absolute.tsv", separator="\t")
 bam_xml_table = bam_vcf_table.join(xml_table, on="sample_name", how="inner")
 bam_xml_table.write_csv("annot/bam_xml_path.absolute.tsv", separator="\t")
 
-no_snv = []
+no_variants = []
+missing_vars = []
 
 for i, path in enumerate(xml_paths):
 	
@@ -253,22 +233,27 @@ for i, path in enumerate(xml_paths):
 	outpath = f"{outdir_root}/{sample_name}"
 	os.makedirs(outpath, exist_ok=True)
  
-	snvs = parse_snvs_from_xml(path)
+	variants, missing_in_vcf = parse_variants_from_xml(path, include_indels=True)
+	missing_vars.append(missing_in_vcf)
 	
-	if snvs.is_empty():
+	if variants.is_empty():
 		print(f'Dataframe for "{sample_name}" is empty. Skipping writing to disk')
-		no_snv.append(
-			pl.DataFrame({"sample_name": [sample_name], "xml_path": [path]})
+		no_variants.append(
+			pl.DataFrame({"sample_name": sample_name, "xml_path": path})
 		)
 		continue
  
-	snvs.write_csv(f"{outpath}/{sample_name}.tsv", separator="\t")
-	snvs.select(["chrom", "pos", "ref", "alt"]).write_csv(f"{outpath}/{sample_name}.snv", separator="\t")
+	variants.write_csv(f"{outpath}/{sample_name}.with-indels.tsv", separator="\t")
+	snv_filter(variants).select(["chrom", "pos", "ref", "alt"]).write_csv(f"{outpath}/{sample_name}.snv", separator="\t")
 
-no_snv = pl.concat(no_snv)
-no_snv.write_csv("annot/xml-no_snv.tsv", include_header=False, separator="\t")
+no_variants = pl.concat(no_variants)
+missing_vars = pl.concat(missing_vars, how="diagonal_relaxed")
+no_variants.write_csv("annot/xml-no_snv.tsv", include_header=False, separator="\t")
+missing_vars.write_csv("annot/xml-variants_missing_in_vcf.tsv", separator="\t")
 
-with_snv_with_bam = bam_xml_table.join(no_snv, on="sample_name", how="anti")
+with_snv_with_bam = bam_xml_table.join(no_variants, on="sample_name", how="anti")
+with_snv_with_bam.write_csv("annot/bam_xml_path-with_variants.absolute.tsv", separator="\t")
+
 xml_no_snv_no_bam = xml_table.join(with_snv_with_bam, on="sample_name", how="anti")
 xml_no_snv_no_bam.write_csv("annot/xml-no_snv-no_bam.tsv", include_header=False, separator="\t")
 
@@ -278,7 +263,7 @@ xml_no_snv_no_bam.write_csv("annot/xml-no_snv-no_bam.tsv", include_header=False,
 
 no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")["sample_name"].to_list()
 
-xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.tsv"))
+xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.with-indels.tsv"))
 mobsnvf_paths = sorted(glob.glob("vcf-ffpe-snvf/*/*.mobsnvf.ffpe.snv") + glob.glob("vcf-oxog-snvf/*/*.mobsnvf.oxog.snv"))
 
 def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
@@ -317,4 +302,4 @@ for i, path in enumerate(xml_snv_paths):
 
 	for mobsnvf_res_path in sample_mobsnvf_path:
 		subset_variants(mobsnvf_res_path, xml_snvs, write_output=True, annotations=True)
-	
+
