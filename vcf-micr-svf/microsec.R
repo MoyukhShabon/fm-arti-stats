@@ -75,77 +75,81 @@ get_target_regions <- function(df_mutation) {
 
 
 #' Process BAM file: Sort, Index, Subset (Slim)
-#' Saves files directly to inputs_dir/slim-bam/filename.bam (no sample subfolder)
+#' Saves files directly to inputs_dir/slim-bam/filename.bam
 subset_bam <- function(bam_file, sample_name, df_mutation, ref_genome_path, inputs_dir) {
-	
-	# Setup flat directory structure
-	slim_bam_dir <- file.path(inputs_dir, "slim-bam")
-	bed_dir <- file.path(inputs_dir, "bed")
-	sorted_bam_dir <- file.path(inputs_dir, "sorted-bam")
-	
-	dir.create(slim_bam_dir, recursive = TRUE, showWarnings = FALSE)
-	dir.create(bed_dir, recursive = TRUE, showWarnings = FALSE)
-	dir.create(sorted_bam_dir, recursive = TRUE, showWarnings = FALSE)
-	
-	bam_basename <- sub("\\.bam$|\\.cram$", "", basename(bam_file))
-	bam_file_slim <- file.path(slim_bam_dir, paste0(bam_basename, ".SLIM.bam"))
-	bam_file_tmp <- file.path(slim_bam_dir, paste0(bam_basename, ".tmp.bam"))
-	bed_file <- file.path(bed_dir, paste0(bam_basename, ".bed"))
-	
-	# Check if SLIM BAM already exists
-	if (file.exists(bam_file_slim) && file.exists(paste0(bam_file_slim, ".bai"))) {
-		message(paste("Slim BAM already exists:", bam_file_slim))
-		return(bam_file_slim)
-	}
-	
-	# 1. Handle Indexing / Sorting of original file if needed
-	is_cram <- tools::file_ext(bam_file) == "cram"
-	index_ext <- if (is_cram) ".crai" else ".bai"
-	
-	if (!(file.exists(paste0(bam_file, index_ext)) || file.exists(gsub("\\.bam$|\\.cram$", index_ext, bam_file)))) {
-		message(paste("Sorting/Indexing original file:", bam_file))
-		
-		sorted_path <- file.path(sorted_bam_dir, paste0(bam_basename, "_sort", if (is_cram) ".cram" else ".bam"))
-		
-		# Sort
-		sort_cmd <- paste("samtools sort -@ 4", 
-							if (is_cram) "-O cram" else "", 
-							"-o", sorted_path, bam_file)
-		run_cmd(sort_cmd)
-		
-		# Index
-		run_cmd(paste("samtools index -@ 4", sorted_path))
-		
-		# Update bam_file to point to the new sorted file
-		bam_file <- sorted_path
-	}
-	
-	# 2. Create BED file
-	message("Calculating target regions...")
-	df_bed <- get_target_regions(df_mutation)
-	write_tsv(df_bed, file = bed_file, col_names = FALSE, progress = FALSE)
-	
-	# 3. Subset (Slim) the BAM
-	message(paste("Subsetting BAM to:", bam_file_slim))
-	
-	ref_opt <- if (is_cram && !is.null(ref_genome_path)) paste("-T", ref_genome_path) else ""
-	
-	cmd_view <- paste("samtools view -b -h --no-PG", ref_opt, 
-					"-L", bed_file, 
-					bam_file, ">", bam_file_slim)
-	run_cmd(cmd_view)
-	
-	# 4. Sort and Index the Slim BAM
-	cmd_sort_slim <- paste("samtools sort -@ 4 -o", bam_file_slim, bam_file_tmp)
-	run_cmd(cmd_sort_slim)
-
-	cmd_index_slim <- paste("samtools index -@ 4", bam_file_slim)
-	run_cmd(cmd_index_slim)
-	
-	# Cleanup
-	if (file.exists(bam_file_tmp)) file.remove(bam_file_tmp)
-	
-	return(bam_file_slim)
+  
+  # Setup flat directory structure
+  slim_bam_dir <- file.path(inputs_dir, "slim-bam")
+  bed_dir <- file.path(inputs_dir, "bed")
+  sorted_bam_dir <- file.path(inputs_dir, "sorted-bam")
+  
+  dir.create(slim_bam_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(bed_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(sorted_bam_dir, recursive = TRUE, showWarnings = FALSE)
+  
+  bam_basename <- sub("\\.bam$|\\.cram$", "", basename(bam_file))
+  bam_file_slim <- file.path(slim_bam_dir, paste0(bam_basename, ".SLIM.bam"))
+  bam_file_tmp <- file.path(slim_bam_dir, paste0(bam_basename, ".tmp.bam"))
+  bed_file <- file.path(bed_dir, paste0(bam_basename, ".bed"))
+  
+  # Check if SLIM BAM already exists
+  if (file.exists(bam_file_slim) && file.exists(paste0(bam_file_slim, ".bai"))) {
+    message(paste("Slim BAM already exists:", bam_file_slim))
+    return(bam_file_slim)
+  }
+  
+  # 1. Handle Indexing / Sorting of original file if needed
+  is_cram <- tools::file_ext(bam_file) == "cram"
+  index_ext <- if (is_cram) ".crai" else ".bai"
+  
+  # Check for index file (either file.bam.bai or file.bai)
+  if (!(file.exists(paste0(bam_file, index_ext)) || file.exists(gsub("\\.bam$|\\.cram$", index_ext, bam_file)))) {
+    message(paste("Sorting/Indexing original file:", bam_file))
+    
+    sorted_path <- file.path(sorted_bam_dir, paste0(bam_basename, "_sort", if (is_cram) ".cram" else ".bam"))
+    
+    # Sort
+    sort_cmd <- paste("samtools sort -@ 4", 
+                      if (is_cram) "-O cram" else "", 
+                      "-o", sorted_path, bam_file)
+    run_cmd(sort_cmd)
+    
+    # Index
+    run_cmd(paste("samtools index -@ 4", sorted_path))
+    
+    # Update bam_file to point to the new sorted file
+    bam_file <- sorted_path
+  }
+  
+  # 2. Create BED file
+  message("Calculating target regions...")
+  df_bed <- get_target_regions(df_mutation)
+  # write_tsv is from readr, ensures tab separation
+  write_tsv(df_bed, file = bed_file, col_names = FALSE, progress = FALSE)
+  
+  # 3. Subset (Slim) the BAM
+  # ### FIX: Output to TMP file first, then Sort to Final. Safer and cleaner.
+  message(paste("Subsetting BAM to:", bam_file_slim))
+  
+  ref_opt <- if (is_cram && !is.null(ref_genome_path)) paste("-T", ref_genome_path) else ""
+  
+  # View regions to TMP
+  cmd_view <- paste("samtools view -b -h --no-PG", ref_opt, 
+                    "-L", bed_file, 
+                    bam_file, ">", bam_file_tmp)
+  run_cmd(cmd_view)
+  
+  # 4. Sort and Index the Slim BAM
+  cmd_sort_slim <- paste("samtools sort -@ 4 -o", bam_file_slim, bam_file_tmp)
+  run_cmd(cmd_sort_slim)
+  
+  cmd_index_slim <- paste("samtools index -@ 4", bam_file_slim)
+  run_cmd(cmd_index_slim)
+  
+  # Cleanup
+  if (file.exists(bam_file_tmp)) file.remove(bam_file_tmp)
+  
+  return(bam_file_slim)
 }
 
 
