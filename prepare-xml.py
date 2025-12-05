@@ -149,12 +149,12 @@ def parse_variants_from_xml(xml_path: str, exclude_vus: bool = False, include_in
 	if var_missing_in_vcf.height > 0:
 		print(f"\tWarning: {var_missing_in_vcf.height} variants from XML not found in VCF.")
 	
-	# Left join XML variants with VCF to get genomic REF/ALT
+	# Inner join XML variants with VCF to get genomic REF/ALT
 	# We join on Chrom and Pos. 
 	df = df_xml.join(
 		vcf, 
 		on=["chrom", "pos"], 
-		how="left"
+		how="inner"
 	)
 
 	# ---- 4. Indel Filtering ----
@@ -248,7 +248,7 @@ for i, path in enumerate(xml_paths):
 
 no_variants = pl.concat(no_variants)
 missing_vars = pl.concat(missing_vars, how="diagonal_relaxed")
-no_variants.write_csv("annot/xml-no_snv.tsv", include_header=False, separator="\t")
+no_variants.write_csv("annot/xml-no_variants.tsv", include_header=False, separator="\t")
 missing_vars.write_csv("annot/xml-variants_missing_in_vcf.tsv", separator="\t")
 
 with_snv_with_bam = bam_xml_table.join(no_variants, on="sample_name", how="anti")
@@ -302,4 +302,41 @@ for i, path in enumerate(xml_snv_paths):
 
 	for mobsnvf_res_path in sample_mobsnvf_path:
 		subset_variants(mobsnvf_res_path, xml_snvs, write_output=True, annotations=True)
+	
 
+
+def subset_variants_microsec(microsec_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
+	microsec_res = pl.read_csv(microsec_res_path, separator="\t").rename({"Chr":"chrom"}).rename(lambda x: x.lower())
+
+	if annotations:
+		microsec_res_subset =  xml_snvs.join(microsec_res, on = ["chrom", "pos", "ref", "alt"], how="inner")
+	else:
+		microsec_res_subset =  microsec_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="semi")
+
+	if write_output:
+		outpath = microsec_res_path.replace("vcf", "xml")
+		os.makedirs(os.path.dirname(outpath), exist_ok=True)
+		microsec_res_subset.write_csv(outpath, separator="\t")
+
+		print(f"\tXML subset written to : {outpath}")
+
+	return microsec_res_subset
+
+no_variants = pl.read_csv("annot/xml-no_variants.tsv", separator="\t")
+
+microsec_res = sorted(glob.glob("vcf-micr-svf/*/*.microsec.tsv"))
+
+for i, path in enumerate(microsec_res):
+
+    print(f"{i+1}. Processing {path}")
+    sample_name = os.path.basename(path).replace(".microsec.tsv", "")
+
+    if sample_name in no_variants["sample_name"].to_list():
+        print("XML for {sample_name} has no variants. Skipping...")
+        continue
+
+    xml_path = f"xml-snvs/{sample_name}/{sample_name}.with-indels.tsv"
+    xml_snvs = pl.read_csv(xml_path, separator="\t")
+    
+    subset_variants_microsec(path, xml_snvs, write_output=True, annotations=True)
+    
