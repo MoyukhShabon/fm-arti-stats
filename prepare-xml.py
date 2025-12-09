@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 import polars as pl
 from lxml import etree
 import os
@@ -11,6 +10,7 @@ import sys
 sys.path.append(os.path.abspath("common-ffpe-snvf/python"))
 
 from mutation_signatures import read_variants
+
 
 # %% [markdown]
 # ## Functions
@@ -54,7 +54,7 @@ def get_variant_properties(xml_root: etree._Element) -> pl.DataFrame:
 		
 	return pl.DataFrame(variant_properties)
 
-def parse_variants_from_xml(xml_path: str, exclude_vus: bool = False, include_indels: bool = False) -> pl.DataFrame:
+def parse_variants_from_xml(xml_path: str, exclude_vus: bool = False, include_indels: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
 	"""
 	Parses an XML report to extract variants and enriches them with REF/ALT alleles 
 	from a companion VCF file located in the same directory.
@@ -217,11 +217,15 @@ xml_table = pl.DataFrame({
 	"xml_path": [os.path.abspath(p) for p in xml_paths]
 })
 
+## Table linking bam and vcf path for each sample
 bam_vcf_table = pl.read_csv("annot/bam_vcf_path.absolute.tsv", separator="\t")
 
+## Table linking BAM, VCF, and XML path each sample
 bam_xml_table = bam_vcf_table.join(xml_table, on="sample_name", how="inner")
 bam_xml_table.write_csv("annot/bam_xml_path.absolute.tsv", separator="\t")
 
+## no_variants: samples which have no variants in the XML
+## missing_vars: XMLs which have variants not found in the VCF
 no_variants = []
 missing_vars = []
 
@@ -233,9 +237,11 @@ for i, path in enumerate(xml_paths):
 	outpath = f"{outdir_root}/{sample_name}"
 	os.makedirs(outpath, exist_ok=True)
  
+	# This function returns empty dataframes in case no variants are found and in cases no variants are missing in the vcf
 	variants, missing_in_vcf = parse_variants_from_xml(path, include_indels=True)
 	missing_vars.append(missing_in_vcf)
 	
+	# Skip writing empty dataframes to disk. 
 	if variants.is_empty():
 		print(f'Dataframe for "{sample_name}" is empty. Skipping writing to disk')
 		no_variants.append(
@@ -248,23 +254,20 @@ for i, path in enumerate(xml_paths):
 
 no_variants = pl.concat(no_variants)
 missing_vars = pl.concat(missing_vars, how="diagonal_relaxed")
-no_variants.write_csv("annot/xml-no_variants.tsv", include_header=False, separator="\t")
+no_variants.write_csv("annot/xml-no_variants.tsv", separator="\t")
 missing_vars.write_csv("annot/xml-variants_missing_in_vcf.tsv", separator="\t")
 
-with_snv_with_bam = bam_xml_table.join(no_variants, on="sample_name", how="anti")
-with_snv_with_bam.write_csv("annot/bam_xml_path-with_variants.absolute.tsv", separator="\t")
+## table linking each sample with paths to BAM and XML, excluding the samples where the XML has no variants
+with_variant_with_bam = bam_xml_table.join(no_variants, on="sample_name", how="anti")
+with_variant_with_bam.write_csv("annot/bam_xml_path-with_variants.absolute.tsv", separator="\t")
 
-xml_no_snv_no_bam = xml_table.join(with_snv_with_bam, on="sample_name", how="anti")
-xml_no_snv_no_bam.write_csv("annot/xml-no_snv-no_bam.tsv", include_header=False, separator="\t")
+## Table with XML and BAM paths for each sample for which the XMLs have no variants
+xml_no_variant_no_bam = xml_table.join(with_variant_with_bam, on="sample_name", how="anti")
+xml_no_variant_no_bam.write_csv("annot/xml-no_variants-no_bam.tsv", include_header=False, separator="\t")
 
 # %% [markdown]
 # ## Subset XML variants
 # Make a subset of the VCF SNVF results to just retain the variants in the XML. Variant in the XML are a subset of the variants in the VCF
-
-no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")["sample_name"].to_list()
-
-xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.with-indels.tsv"))
-mobsnvf_paths = sorted(glob.glob("vcf-ffpe-snvf/*/*.mobsnvf.ffpe.snv") + glob.glob("vcf-oxog-snvf/*/*.mobsnvf.oxog.snv"))
 
 def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
 	mobsnvf_res = read_variants(mobsnvf_res_path).rename({"fobp":"FOBP"})
@@ -282,6 +285,30 @@ def subset_variants(mobsnvf_res_path: str, xml_snvs: pl.DataFrame, write_output:
 		print(f"\tXML subset written to : {outpath}")
 
 	return mobsnvf_res_subset
+
+
+def subset_variants_microsec(microsec_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
+	microsec_res = pl.read_csv(microsec_res_path, separator="\t").rename({"Chr":"chrom"}).rename(lambda x: x.lower())
+
+	if annotations:
+		microsec_res_subset =  xml_snvs.join(microsec_res, on = ["chrom", "pos", "ref", "alt"], how="inner")
+	else:
+		microsec_res_subset =  microsec_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="semi")
+
+	if write_output:
+		outpath = microsec_res_path.replace("vcf", "xml")
+		os.makedirs(os.path.dirname(outpath), exist_ok=True)
+		microsec_res_subset.write_csv(outpath, separator="\t")
+
+		print(f"\tXML subset written to : {outpath}")
+
+	return microsec_res_subset
+
+no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")["sample_name"].to_list()
+xml_no_variants = pl.read_csv("annot/xml-no_variants.tsv", separator="\t")
+
+xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.with-indels.tsv"))
+mobsnvf_paths = sorted(glob.glob("vcf-ffpe-snvf/*/*.mobsnvf.ffpe.snv") + glob.glob("vcf-oxog-snvf/*/*.mobsnvf.oxog.snv"))
 
 for i, path in enumerate(xml_snv_paths):
 	
@@ -302,27 +329,7 @@ for i, path in enumerate(xml_snv_paths):
 
 	for mobsnvf_res_path in sample_mobsnvf_path:
 		subset_variants(mobsnvf_res_path, xml_snvs, write_output=True, annotations=True)
-	
 
-
-def subset_variants_microsec(microsec_res_path: str, xml_snvs: pl.DataFrame, write_output: bool = False, annotations: bool = False) -> pl.DataFrame:
-	microsec_res = pl.read_csv(microsec_res_path, separator="\t").rename({"Chr":"chrom"}).rename(lambda x: x.lower())
-
-	if annotations:
-		microsec_res_subset =  xml_snvs.join(microsec_res, on = ["chrom", "pos", "ref", "alt"], how="inner")
-	else:
-		microsec_res_subset =  microsec_res.join(xml_snvs, on = ["chrom", "pos", "ref", "alt"], how="semi")
-
-	if write_output:
-		outpath = microsec_res_path.replace("vcf", "xml")
-		os.makedirs(os.path.dirname(outpath), exist_ok=True)
-		microsec_res_subset.write_csv(outpath, separator="\t")
-
-		print(f"\tXML subset written to : {outpath}")
-
-	return microsec_res_subset
-
-no_variants = pl.read_csv("annot/xml-no_variants.tsv", separator="\t")
 
 microsec_res = sorted(glob.glob("vcf-micr-svf/*/*.microsec.tsv"))
 
@@ -331,7 +338,7 @@ for i, path in enumerate(microsec_res):
     print(f"{i+1}. Processing {path}")
     sample_name = os.path.basename(path).replace(".microsec.tsv", "")
 
-    if sample_name in no_variants["sample_name"].to_list():
+    if sample_name in xml_no_variants["sample_name"].to_list():
         print("XML for {sample_name} has no variants. Skipping...")
         continue
 
