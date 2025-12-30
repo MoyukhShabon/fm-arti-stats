@@ -15,7 +15,14 @@ def get_test_type(xml_path: int) -> str:
 	
 	tree = etree.parse(xml_path)
 	root = tree.getroot()
-	return root.xpath("//TestType")[0].text
+	text_raw = root.xpath("//TestType")[0].text
+	text = (text_raw
+        .replace(" ", "")
+        .replace("FoundationOneLiquidDx", "FoundationOneLiquidCDX")
+        .replace("FoundationOneCDx", "FoundationOneCDX")
+		.replace("FoundationOneLiquidCDx", "FoundationOneLiquidCDX")
+	)
+	return text
 
 
 # %%
