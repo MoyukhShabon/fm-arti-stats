@@ -339,7 +339,7 @@ for i, path in enumerate(microsec_res):
     sample_name = os.path.basename(path).replace(".microsec.tsv", "")
 
     if sample_name in xml_no_variants["sample_name"].to_list():
-        print("XML for {sample_name} has no variants. Skipping...")
+        print(f"XML for {sample_name} has no variants. Skipping...")
         continue
 
     xml_path = f"xml-variants/{sample_name}/{sample_name}.with-indels.tsv"
