@@ -53,7 +53,7 @@ def annotate_mobsnvf_res(mobsnvf_res_path: str, annotated_snvs: pl.DataFrame) ->
 # ### VUS exclusion
 
 no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")
-xml_snv_annot_paths = sorted(glob.glob('xml-snvs/*/*.tsv'))
+xml_snv_annot_paths = sorted(glob.glob('xml-variants/*/*.tsv'))
 
 
 no_variants = []
@@ -70,6 +70,7 @@ for i, path in enumerate(xml_snv_annot_paths):
 	xml_path = return_if_exists(f"data/{sample_name}.xml")
 	ffpe_snvf_path = return_if_exists(f"xml-ffpe-snvf/{sample_name}/{sample_name}.mobsnvf.ffpe.snv")
 	oxog_snvf_path = return_if_exists(f"xml-oxog-snvf/{sample_name}/{sample_name}.mobsnvf.oxog.snv")
+	micr_svf_path = return_if_exists(f"xml-micr-svf/{sample_name}/{sample_name}.microsec.tsv") ## May exclude samples with only indels
 	
 	annotated_snvs = pl.read_csv(path, separator="\t")
 	mobsnvf_ffpe_annot = annotate_mobsnvf_res(ffpe_snvf_path, annotated_snvs)

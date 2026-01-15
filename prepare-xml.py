@@ -208,7 +208,7 @@ def parse_variants_from_xml(xml_path: str, exclude_vus: bool = False, include_in
 # %% [markdown]
 # ## Parse XML to SNV
 
-outdir_root = "xml-snvs"
+outdir_root = "xml-variants"
 
 xml_paths = sorted(glob.glob("data/*.xml"))
 
@@ -307,7 +307,7 @@ def subset_variants_microsec(microsec_res_path: str, xml_snvs: pl.DataFrame, wri
 no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")["sample_name"].to_list()
 xml_no_variants = pl.read_csv("annot/xml-no_variants.tsv", separator="\t")
 
-xml_snv_paths = sorted(glob.glob("xml-snvs/*/*.with-indels.tsv"))
+xml_snv_paths = sorted(glob.glob("xml-variants/*/*.with-indels.tsv"))
 mobsnvf_paths = sorted(glob.glob("vcf-ffpe-snvf/*/*.mobsnvf.ffpe.snv") + glob.glob("vcf-oxog-snvf/*/*.mobsnvf.oxog.snv"))
 
 for i, path in enumerate(xml_snv_paths):
@@ -342,7 +342,7 @@ for i, path in enumerate(microsec_res):
         print("XML for {sample_name} has no variants. Skipping...")
         continue
 
-    xml_path = f"xml-snvs/{sample_name}/{sample_name}.with-indels.tsv"
+    xml_path = f"xml-variants/{sample_name}/{sample_name}.with-indels.tsv"
     xml_snvs = pl.read_csv(xml_path, separator="\t")
     
     subset_variants_microsec(path, xml_snvs, write_output=True, annotations=True)

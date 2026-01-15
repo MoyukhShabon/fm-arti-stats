@@ -143,12 +143,6 @@ for i, path in enumerate(pred_paths):
 	
 	pred = pl.read_csv(path, separator="\t").with_columns(pl.lit(sample_name).alias("sample_name"), pl.lit(arti_type).alias("arti_type"),  pl.lit(source).alias("source"))
 
-	# # Annotate VCF SNVs where possible using XML
-	# if source == "VCF":
-	# 	annot_path = f"../xml-snvs/{sample_name}/{sample_name}.tsv"
-	# 	if os.path.exists(annot_path):
-	# 		pred = annotate_variants(annot_path, pred)
-
 	arti = (
 		pred
 		.filter(~pl.col("pred"))
