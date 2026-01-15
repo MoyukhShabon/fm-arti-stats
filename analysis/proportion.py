@@ -15,9 +15,10 @@ def get_test_type(xml_path: int) -> str:
 	tree = etree.parse(xml_path)
 	root = tree.getroot()
 	return (
-		root.
-		xpath("//TestType")[0]
-		.text.replace(" ", "")
+		root
+		.xpath("//TestType")[0]
+		.text
+		.replace(" ", "")
 		.replace("FoundationOneCDX", "FoundationOneCDx")
 		.replace("FoundationOneLiquidCDx", "FoundationOneLiquidDx")
 	)
@@ -185,13 +186,13 @@ get_res("XML", "OXOG", 1e-08, exclude_vus=True)
 
 # %% [markdown]
 # ## FP-CUT = 5e-01
+# 
+# This is not a good cut off according to our testing.
 
 # %% [markdown]
 # ### FFPE artifacts
 
 get_res("vcf", "ffpe", 5e-01)
-
-get_res("vcf", "oxog", 5e-01)
 
 get_res("xml", "ffpe", 5e-01)
 
@@ -199,6 +200,8 @@ get_res("xml", "ffpe", 5e-01, exclude_vus=True)
 
 # %% [markdown]
 # ### OXOG Artifacts
+
+get_res("vcf", "oxog", 5e-01)
 
 get_res("xml", "oxog", 5e-01)
 
