@@ -7,7 +7,6 @@ from lxml import etree
 # %% [markdown]
 # ## Functions
 
-# %%
 def get_test_type(xml_path: int) -> str:
 	
 	if not os.path.exists(xml_path):
@@ -15,33 +14,34 @@ def get_test_type(xml_path: int) -> str:
 	
 	tree = etree.parse(xml_path)
 	root = tree.getroot()
-	text_raw = root.xpath("//TestType")[0].text
-	text = (text_raw
-        .replace(" ", "")
-        .replace("FoundationOneLiquidDx", "FoundationOneLiquidCDX")
-        .replace("FoundationOneCDx", "FoundationOneCDX")
-		.replace("FoundationOneLiquidCDx", "FoundationOneLiquidCDX")
+	return (
+		root.
+		xpath("//TestType")[0]
+		.text.replace(" ", "")
+		.replace("FoundationOneCDX", "FoundationOneCDx")
+		.replace("FoundationOneLiquidCDx", "FoundationOneLiquidDx")
 	)
-	return text
 
 
-# %%
-def calc_arti_prop(artifact_pred_paths: list) -> pl.DataFrame:
+def calc_arti_prop(artifact_pred_paths: list, arti_type: str, variant_source: str) -> pl.DataFrame:
 	arti_prop = []
 
 	# c = 1
 	for path in artifact_pred_paths:
 		
-		artifact_pred = pl.read_csv(path, separator="\t")
+		artifact_pred = pl.read_csv(path, separator="\t", infer_schema_length=1000)
 
 		if artifact_pred.is_empty():
 			# print(f"{c}. Skipping {path} as it is empty. \n\tLikely Reasons include no corresponding BAMs, no variants in the VCF, or no variants after VUS exclusion")
 			# c += 1
 			continue
 
-		snvs = artifact_pred.shape[0]
+		variants = artifact_pred.shape[0]
 		
-		artifacts = artifact_pred.filter(~pl.col("pred")).shape[0]
+		if arti_type.lower() == "micr":
+			artifacts = artifact_pred.filter(~pl.col("msec_filter_1234").is_null()).shape[0]
+		else:
+			artifacts = artifact_pred.filter(~pl.col("pred")).shape[0]
 
 		sample_name = os.path.basename(path).split(".")[0]
 		xml_path = f"../data/{sample_name}.xml"
@@ -49,11 +49,13 @@ def calc_arti_prop(artifact_pred_paths: list) -> pl.DataFrame:
 
 		sample_stats = {
 			"sample_name" : sample_name,
+			"source": variant_source.upper(),
 			"test_type": test_type,
-			"n_snv" : snvs,
-			"n_real" : (snvs - artifacts),
+			"arti_type": arti_type.upper(),
+			"n_variants" : variants,
+			"n_real" : (variants - artifacts),
 			"n_artifacts" : artifacts,
-			"proportion" : (artifacts / snvs)
+			"proportion" : (artifacts / variants)
 		}
 
 		arti_prop.append(sample_stats)
@@ -61,7 +63,6 @@ def calc_arti_prop(artifact_pred_paths: list) -> pl.DataFrame:
 	arti_prop = pl.DataFrame(arti_prop).sort("proportion", descending=True)
 	return arti_prop
 
-# %%
 def get_stats(arti_prop: pl.DataFrame, damage_type: str = None, variant_source: str = None) -> None:
 	
 	prop_test_type = (
@@ -91,37 +92,34 @@ def get_stats(arti_prop: pl.DataFrame, damage_type: str = None, variant_source: 
 	n_with_artifacts = has_artifact_df.shape[0]
 	mean_pct_arti_samples = has_artifact_df["proportion"].mean() * 100
 
-	if damage_type:
-		print("Damage Type:", damage_type.upper())
-
-	if variant_source:
-		print("Variant Source:", variant_source.upper())
+	arti_type = damage_type.upper()
+	print("Damage Type:", arti_type)
+	print("Variant Source:", variant_source.upper())
 
 	print(f"Samples analyzed: {n_samples}")
-	print(f"Samples with ≥1 predicted artifact: {n_with_artifacts} ({n_with_artifacts / n_samples * 100:.1f}%)")
-	print(f"Mean proportion of artifactual SNVs: {mean_pct:.2f}%")
-	print(f"Max proportion of artifactual SNVs: {max_pct:.2f}%")
-	print(f"Mean proportion of artifactual SNVs within samples with ≥1 predicted artifact: {mean_pct_arti_samples:.2f}%")
+	print(f"Samples with ≥1 predicted {arti_type} artifact: {n_with_artifacts} ({n_with_artifacts / n_samples * 100:.1f}%)")
+	print(f"Mean proportion of {arti_type} artifactual SNVs: {mean_pct:.2f}%")
+	print(f"Max proportion of {arti_type} artifactual SNVs: {max_pct:.2f}%")
+	print(f"Mean proportion of {arti_type} artifactual SNVs within samples with ≥1 predicted artifact: {mean_pct_arti_samples:.2f}%")
  
 	print("\nResults stratified by test type:\n")
 	for i in range(prop_test_type.shape[0]):
 
 		test_type = prop_test_type[i, "test_type"]
 
-		print(f"\t{test_type} samples: {prop_test_type[i, "count"]}")
-		print(f"\t{test_type} max artifact proportion within samples: {prop_test_type[i, "max_proportion"] * 100:.2f}%")
-		print(f"\t{test_type} mean artifact proportion within samples: {prop_test_type[i, "mean_proportion"] * 100:.2f}%")
+		print(f"\t{test_type} samples analyzed: {prop_test_type[i, "count"]}")
+		print(f"\t{test_type} max {arti_type} artifact proportion within samples: {prop_test_type[i, "max_proportion"] * 100:.2f}%")
+		print(f"\t{test_type} mean {arti_type} artifact proportion within samples: {prop_test_type[i, "mean_proportion"] * 100:.2f}%")
 
 		prop_test_type_with_artifact_filtered = prop_test_type_with_artifact.filter(pl.col("test_type") == test_type)
 
 		if prop_test_type_with_artifact_filtered.shape[0]:
-			print(f"\t{test_type} samples with >1 artifact: {prop_test_type_with_artifact_filtered[0, "count_>=1_artifact"]}")
-			print(f"\t{test_type} mean artifact proportion within samples with ≥1 detected artifacts: {prop_test_type_with_artifact_filtered[0, "mean_proportion"] * 100:.2f}%")
+			print(f"\t{test_type} samples with {arti_type} artifact: {prop_test_type_with_artifact_filtered[0, "count_>=1_artifact"]}")
+			print(f"\t{test_type} mean artifact proportion within samples with ≥1 detected {arti_type} artifacts: {prop_test_type_with_artifact_filtered[0, "mean_proportion"] * 100:.2f}%")
 
 		print()
 	print("-----------------\n")
 
-# %%
 def get_res(variant_source: str, damage_type: str, fp_cut: float, write_data: bool = True, exclude_vus = False) -> pl.DataFrame:
 	
 	if not exclude_vus:
@@ -130,60 +128,79 @@ def get_res(variant_source: str, damage_type: str, fp_cut: float, write_data: bo
 		vus_token = ".no_vus"
 		print("VUS Excluded")
 
-	search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-snvf/*/*.mobsnvf.{damage_type.lower()}{vus_token}.pred_fp-cut_{fp_cut:.0e}.tsv"
+	if damage_type.lower() == "micr":
+		search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-svf/*/*.microsec.tsv"
+	else:
+		search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-snvf/*/*.mobsnvf.{damage_type.lower()}{vus_token}.pred_fp-cut_{fp_cut:.0e}.tsv"
+	
 	arti_pred_paths = glob.glob(search_pattern)
- 
+	
 	if not arti_pred_paths:
-		raise FileNotFoundError (f"No predictions made with fp-cut: {fp_cut:.0e} at {search_pattern}")
+		raise FileNotFoundError (f"No predictions found at {search_pattern}")
 
-	proportions = calc_arti_prop(arti_pred_paths)
+	proportions = calc_arti_prop(arti_pred_paths, damage_type, variant_source)
 
-	print(f"FP-cut: {fp_cut}")
+	if fp_cut:
+		print(f"FP-cut: {fp_cut}")
+
 	get_stats(proportions, damage_type=damage_type, variant_source=variant_source)
 
 	if write_data:
-		proportions.write_csv(f"{damage_type}_proportions_per_sample.{variant_source.lower()}{vus_token}.fp-cut_{fp_cut:.0e}.tsv", separator="\t")
+		if damage_type.lower() == "micr":
+			proportions.write_csv(f"{damage_type.lower()}_proportions_per_sample.{variant_source.lower()}.tsv", separator="\t")
+		else:
+			proportions.write_csv(f"{damage_type.lower()}_proportions_per_sample.{variant_source.lower()}{vus_token}.fp-cut_{fp_cut:.0e}.tsv", separator="\t")
 	
 	return proportions
 
 # %% [markdown]
-# ## FP-CUT=1e-08
+# ## MICR Artifacts
 
-# %%
-get_res("vcf", "ffpe", 1e-08)
+get_res("VCF", "MICR", None)
 
-# %%
-get_res("xml", "ffpe", 1e-08)
-
-# %%
-get_res("xml", "ffpe", 1e-08, exclude_vus=True)
-
-# %%
-get_res("vcf", "oxog", 1e-08)
-
-# %%
-get_res("xml", "oxog", 1e-08)
-
-# %%
-get_res("xml", "oxog", 1e-08, exclude_vus=True)
+get_res("XML", "MICR", None)
 
 # %% [markdown]
-# ## FP-CUT = 5e-01
+# ## FP-CUT=1e-08
 
-# %%
-get_res("vcf", "ffpe", 5e-01)
+# %% [markdown]
+# ### FFPE Artifacts
 
-# %%
-get_res("vcf", "oxog", 5e-01)
+get_res("VCF", "FFPE", 1e-08)
 
-# %%
-get_res("xml", "ffpe", 5e-01)
+get_res("XML", "FFPE", 1e-08)
 
-# %%
-get_res("xml", "ffpe", 5e-01, exclude_vus=True)
+get_res("XML", "FFPE", 1e-08, exclude_vus=True)
 
-# %%
-get_res("xml", "oxog", 5e-01)
+# %% [markdown]
+# ### OXOG Artifacts
 
-# %%
-get_res("xml", "oxog", 5e-01, exclude_vus=True)
+get_res("VCF", "OXOG", 1e-08)
+
+get_res("XML", "OXOG", 1e-08)
+
+get_res("XML", "OXOG", 1e-08, exclude_vus=True)
+
+## FP-cut of 0.5 was determined to be bad threshold
+## Therefore, this was skipped.
+# # %% [markdown]
+# # ## FP-CUT = 5e-01
+
+# # %% [markdown]
+# # ### FFPE artifacts
+
+# get_res("vcf", "ffpe", 5e-01)
+
+# get_res("vcf", "oxog", 5e-01)
+
+# get_res("xml", "ffpe", 5e-01)
+
+# get_res("xml", "ffpe", 5e-01, exclude_vus=True)
+
+# # %% [markdown]
+# # ### OXOG Artifacts
+
+# get_res("xml", "oxog", 5e-01)
+
+# get_res("xml", "oxog", 5e-01, exclude_vus=True)
+
