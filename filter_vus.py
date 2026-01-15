@@ -74,8 +74,8 @@ for i, path in enumerate(xml_snv_annot_paths):
 	micr_svf_path = return_if_exists(f"xml-micr-svf/{sample_name}/{sample_name}.microsec.tsv")
 	
 	mobsnvf_ffpe_annot = annotate_res(ffpe_snvf_path, path)
-	mobsnvf_oxog_annot = annotate_res(ffpe_snvf_path, path)
-	msec_micr_annot = annotate_res(ffpe_snvf_path, path)
+	mobsnvf_oxog_annot = annotate_res(oxog_snvf_path, path)
+	msec_micr_annot = annotate_res(micr_svf_path, path)
 	
 	if ("is_vus" not in mobsnvf_ffpe_annot.columns):
 		# XMLs seem to only have variant properties with VUS being true
