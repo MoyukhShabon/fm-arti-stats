@@ -129,7 +129,7 @@ def get_res(variant_source: str, damage_type: str, fp_cut: float, write_data: bo
 		print("VUS Excluded")
 
 	if damage_type.lower() == "micr":
-		search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-svf/*/*.microsec.tsv"
+		search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-svf/*/*.microsec{vus_token}.tsv"
 	else:
 		search_pattern = f"../{variant_source.lower()}-{damage_type.lower()}-snvf/*/*.mobsnvf.{damage_type.lower()}{vus_token}.pred_fp-cut_{fp_cut:.0e}.tsv"
 	
@@ -160,6 +160,8 @@ get_res("VCF", "MICR", None)
 
 get_res("XML", "MICR", None)
 
+get_res("XML", "MICR", None, exclude_vus=True)
+
 # %% [markdown]
 # ## FP-CUT=1e-08
 
@@ -181,26 +183,25 @@ get_res("XML", "OXOG", 1e-08)
 
 get_res("XML", "OXOG", 1e-08, exclude_vus=True)
 
-## FP-cut of 0.5 was determined to be bad threshold
-## Therefore, this was skipped.
-# # %% [markdown]
-# # ## FP-CUT = 5e-01
+# %% [markdown]
+# ## FP-CUT = 5e-01
 
-# # %% [markdown]
-# # ### FFPE artifacts
+# %% [markdown]
+# ### FFPE artifacts
 
-# get_res("vcf", "ffpe", 5e-01)
+get_res("vcf", "ffpe", 5e-01)
 
-# get_res("vcf", "oxog", 5e-01)
+get_res("vcf", "oxog", 5e-01)
 
-# get_res("xml", "ffpe", 5e-01)
+get_res("xml", "ffpe", 5e-01)
 
-# get_res("xml", "ffpe", 5e-01, exclude_vus=True)
+get_res("xml", "ffpe", 5e-01, exclude_vus=True)
 
-# # %% [markdown]
-# # ### OXOG Artifacts
+# %% [markdown]
+# ### OXOG Artifacts
 
-# get_res("xml", "oxog", 5e-01)
+get_res("xml", "oxog", 5e-01)
 
-# get_res("xml", "oxog", 5e-01, exclude_vus=True)
+get_res("xml", "oxog", 5e-01, exclude_vus=True)
+
 
