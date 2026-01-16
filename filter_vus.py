@@ -57,7 +57,8 @@ no_bam_list = pl.read_csv("annot/vcf-no_bam.tsv", separator="\t")
 xml_snv_annot_paths = sorted(glob.glob('xml-variants/*/*.with-indels.tsv'))
 
 
-no_variants = []
+no_var_less_vus = []
+no_vus = []
 
 for i, path in enumerate(xml_snv_annot_paths):
 	sample_name = path.split("/")[-2]
@@ -76,34 +77,34 @@ for i, path in enumerate(xml_snv_annot_paths):
 	mobsnvf_ffpe_annot = annotate_res(ffpe_snvf_path, path)
 	mobsnvf_oxog_annot = annotate_res(oxog_snvf_path, path)
 	msec_micr_annot = annotate_res(micr_svf_path, path)
-	
-	if ("is_vus" not in mobsnvf_ffpe_annot.columns):
-		# XMLs seem to only have variant properties with VUS being true
-		# However a VUS == TRUE filter is applied just in case
-		var_properties_vus = get_variant_properties(xml_path).filter(pl.col("is_vus"))
-		
-		# Subset variants
-		mobsnvf_ffpe_no_vus = mobsnvf_ffpe_annot.join(var_properties_vus, left_on="protein_effect", right_on="variant_name", how="anti")
-		mobsnvf_oxog_no_vus = mobsnvf_oxog_annot.join(var_properties_vus, left_on="protein_effect", right_on="variant_name", how="anti")
-		msec_micr_no_vus = msec_micr_annot.join(var_properties_vus, left_on="protein_effect", right_on="variant_name", how="anti")
 
-	else:
-		mobsnvf_ffpe_no_vus = mobsnvf_ffpe_annot.filter(~pl.col("is_vus"))
-		mobsnvf_oxog_no_vus = mobsnvf_oxog_annot.filter(~pl.col("is_vus"))
-		msec_micr_no_vus = msec_micr_annot.filter(~pl.col("is_vus"))
+	mobsnvf_ffpe_no_vus = mobsnvf_ffpe_annot.filter(~pl.col("is_vus"))
+	mobsnvf_oxog_no_vus = mobsnvf_oxog_annot.filter(~pl.col("is_vus"))
+	msec_micr_no_vus = msec_micr_annot.filter(~pl.col("is_vus"))
+
+	mobsnvf_ffpe_vus_only = mobsnvf_ffpe_annot.filter(pl.col("is_vus"))
+	mobsnvf_oxog_vus_only = mobsnvf_oxog_annot.filter(pl.col("is_vus"))
+	msec_micr_vus_only = msec_micr_annot.filter(pl.col("is_vus"))
 
 	
 	if mobsnvf_ffpe_no_vus.is_empty():
 		print(f"\t{sample_name} has no variants after VUS exclusion")
-		no_variants.append(sample_name)
-		continue
-	
-	mobsnvf_ffpe_no_vus.write_csv(ffpe_snvf_path.replace(".snv", ".no_vus.snv"), separator="\t")
-	mobsnvf_oxog_no_vus.write_csv(oxog_snvf_path.replace(".snv", ".no_vus.snv"), separator="\t")
-	msec_micr_no_vus.write_csv(micr_svf_path.replace(".tsv", ".no_vus.tsv"), separator="\t")
+		no_var_less_vus.append(sample_name)
+	else:
+		mobsnvf_ffpe_no_vus.write_csv(ffpe_snvf_path.replace(".snv", ".no_vus.snv"), separator="\t")
+		mobsnvf_oxog_no_vus.write_csv(oxog_snvf_path.replace(".snv", ".no_vus.snv"), separator="\t")
+		msec_micr_no_vus.write_csv(micr_svf_path.replace(".tsv", ".no_vus.tsv"), separator="\t")
+
+
+	if mobsnvf_ffpe_vus_only.is_empty():
+		print(f"\t{sample_name} has no VUS")
+		no_vus.append(sample_name)
+	else:
+		mobsnvf_ffpe_vus_only.write_csv(ffpe_snvf_path.replace(".snv", ".vus_only.snv"), separator="\t")
+		mobsnvf_oxog_vus_only.write_csv(oxog_snvf_path.replace(".snv", ".vus_only.snv"), separator="\t")
+		msec_micr_vus_only.write_csv(micr_svf_path.replace(".tsv", ".vus_only.tsv"), separator="\t")
 
    
-pl.DataFrame(no_variants).write_csv("annot/xml-no_snv-vus_filtration.txt", separator="\t", include_header=False)
-	
-
+pl.DataFrame(no_var_less_vus).write_csv("annot/xml-no_snv-vus_filtration.txt", separator="\t", include_header=False)
+pl.DataFrame(no_vus).write_csv("annot/xml-no_vus.txt", separator="\t", include_header=False)
 
