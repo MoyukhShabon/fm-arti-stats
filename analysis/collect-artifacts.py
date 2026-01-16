@@ -4,6 +4,8 @@ import os
 import polars as pl
 from lxml import etree
 
+## TODO: Implement functionality to collect all variants regardless of artifact or not
+
 # %% [markdown]
 # ### Useful Setup
 
@@ -141,7 +143,14 @@ for i, path in enumerate(pred_paths):
 	
 	print(f"{i+1}. Processing {path}")
 	
-	pred = pl.read_csv(path, separator="\t").with_columns(pl.lit(sample_name).alias("sample_name"), pl.lit(arti_type).alias("arti_type"),  pl.lit(source).alias("source"))
+	pred = (
+		pl.read_csv(path, separator="\t")
+		.with_columns(
+			pl.lit(sample_name).alias("sample_name"), 
+			pl.lit(arti_type).alias("arti_type"),  
+			pl.lit(source).alias("source")
+		)
+	)
 
 	arti = (
 		pred
@@ -152,7 +161,7 @@ for i, path in enumerate(pred_paths):
 	collected_artifacts.append(arti)
 	
 
-ffpe_oxog = (
+ffpe_oxog_arti = (
     pl.concat(collected_artifacts, how="diagonal_relaxed")
 	# Remove duplicated artifacts i.e artifacts that appear both in XML and VCF. Only the XML artifacts are retained
 	.filter(~((pl.struct(["sample_name", "chrom", "pos", "ref", "alt"]).is_duplicated()) & (pl.col("source") == "VCF")))
@@ -202,7 +211,7 @@ for i, path in enumerate(microsec_paths):
 
 	msec_collected.append(msec_sample)
 
-micr = (
+micr_arti = (
 	pl.concat(msec_collected, how="diagonal_relaxed")
 	# Reorder and select necessary columns
 	.select(schema_msec)
@@ -216,7 +225,7 @@ micr = (
 # ### Combine Results
 
 all_artifacts = (
-	pl.concat([ffpe_oxog, micr], how="diagonal_relaxed")
+	pl.concat([ffpe_oxog_arti, micr_arti], how="diagonal_relaxed")
 	# Sort
 	.with_columns(pl.col("chrom").map_elements(lambda x : chrom_indices.get(x, 99), return_dtype=int).alias("chrom_n"))
 	.sort(["sample_name", "chrom_n", "pos", "source", "arti_type"])
